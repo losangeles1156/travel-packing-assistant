@@ -1,0 +1,5 @@
+{
+  "name": "Travel Packing Assistant",
+  "description": "An intelligent packing list generator that automatically sorts items into carry-on and checked luggage based on flight regulations and user preferences.",
+  "requestFramePermissions": []
+}
