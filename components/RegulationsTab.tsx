@@ -3,6 +3,8 @@ import { REGULATION_CATEGORIES, REGULATION_RULES } from '../constants';
 import { trackEvent } from '../services/analyticsService';
 import BatteryCalculator from './BatteryCalculator';
 import VisualRegulationGuide from './VisualRegulationGuide';
+import CommonItemsTable from './CommonItemsTable';
+import LiquidsVisual from './LiquidsVisual';
 
 const HOT_TOPICS = [
   { label: '行動電源', icon: 'fa-battery-full' },
@@ -124,7 +126,9 @@ const RegulationsTab: React.FC = () => {
       )}
 
       <div className="mb-8 space-y-6">
+        <CommonItemsTable />
         <BatteryCalculator />
+        <LiquidsVisual />
         <VisualRegulationGuide />
       </div>
 
