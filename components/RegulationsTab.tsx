@@ -1,6 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { REGULATION_CATEGORIES, REGULATION_RULES } from '../constants';
 import { trackEvent } from '../services/analyticsService';
+import BatteryCalculator from './BatteryCalculator';
+import VisualRegulationGuide from './VisualRegulationGuide';
+
+const HOT_TOPICS = [
+  { label: '行動電源', icon: 'fa-battery-full' },
+  { label: '液體', icon: 'fa-bottle-water' },
+  { label: '藥品', icon: 'fa-pills' },
+  { label: '肉乾', icon: 'fa-drumstick-bite' },
+  { label: '電子菸', icon: 'fa-smoking-ban' },
+];
 
 const RegulationsTab: React.FC = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -23,9 +33,11 @@ const RegulationsTab: React.FC = () => {
       .map(result => result.rule);
   }, [searchQuery]);
 
-  const handleSearch = () => {
-    if (!searchQuery.trim()) return;
-    trackEvent('regulation_query', { query: searchQuery });
+  const handleSearch = (query?: string) => {
+    const q = query || searchQuery;
+    if (!q.trim()) return;
+    if (query) setSearchQuery(query);
+    trackEvent('regulation_query', { query: q });
   };
 
   return (
@@ -37,7 +49,7 @@ const RegulationsTab: React.FC = () => {
 
       <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 rounded-2xl shadow-lg mb-8 text-white">
         <label className="block text-sm font-medium mb-2 opacity-90"><i className="fa-solid fa-magnifying-glass mr-2"></i>規則查詢</label>
-        <div className="flex gap-2">
+        <div className="flex gap-2 mb-4">
           <input
             type="text"
             value={searchQuery}
@@ -47,11 +59,24 @@ const RegulationsTab: React.FC = () => {
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           />
           <button
-            onClick={handleSearch}
+            onClick={() => handleSearch()}
             className="bg-white/20 hover:bg-white/30 text-white px-6 py-3 rounded-lg font-bold transition"
           >
             查詢
           </button>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {HOT_TOPICS.map(topic => (
+            <button
+              key={topic.label}
+              onClick={() => handleSearch(topic.label)}
+              className="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-full text-xs transition flex items-center gap-1.5 border border-white/10"
+            >
+              <i className={`fa-solid ${topic.icon}`}></i>
+              {topic.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -97,6 +122,11 @@ const RegulationsTab: React.FC = () => {
           )}
         </div>
       )}
+
+      <div className="mb-8 space-y-6">
+        <BatteryCalculator />
+        <VisualRegulationGuide />
+      </div>
 
       {/* Category List */}
       <div className="space-y-4">
