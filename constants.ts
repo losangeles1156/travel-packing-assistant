@@ -62,7 +62,7 @@ export const PRE_FLIGHT_TASKS: PreFlightTask[] = [
   { id: 'crit1', task: '確認並攜帶「實體護照」 (有效期限需6個月以上)', completed: false, important: true },
   { id: 'crit2', task: '確認並攜帶「實體簽證 / 入境許可」', completed: false, important: true },
   { id: 'crit3', task: '備妥「機票 / 登機證」 (建議截圖或列印紙本備用)', completed: false, important: true },
-  
+
   // General Tasks
   { id: 'pf1', task: '機票英文姓名檢查 (需與護照完全相同)', completed: false },
   { id: 'pf2', task: '旅平險 / 旅遊不便險投保確認', completed: false },
@@ -228,6 +228,10 @@ export const REGULATION_CATEGORIES: RegulationCategory[] = [
     icon: 'fa-bottle-water',
     description: '隨身攜帶液體限制規定',
     details: '單一容器不得超過 100ml (3.4 oz)。所有容器需裝入一個不超過 1 公升 (20x20cm) 可重複密封的透明塑膠袋中。每人限帶一袋。超過此限制請放入託運行李。',
+    source: {
+      title: '交通部民航局 - 液體攜帶規定',
+      url: 'https://www.caa.gov.tw/Article.aspx?a=1055&lang=1'
+    }
   },
   {
     id: 'reg2',
@@ -235,13 +239,21 @@ export const REGULATION_CATEGORIES: RegulationCategory[] = [
     icon: 'fa-battery-full',
     description: '鋰電池安全規範',
     details: '備用鋰電池與行動電源 **必須手提**，嚴禁託運。規格通常限制在 100Wh 內可攜帶，100Wh-160Wh 需航空公司批准，超過 160Wh 禁止攜帶。',
+    source: {
+      title: '交通部民航局 - 危險物品規範',
+      url: 'https://www.caa.gov.tw/Article.aspx?a=1055&lang=1'
+    }
   },
   {
     id: 'reg3',
     name: '藥品',
     icon: 'fa-pills',
     description: '處方藥與成藥規定',
-    details: '建議攜帶醫師處方箋或藥品說明書。液體藥水若超過 100ml 需申報或出示證明。管制藥品需依各國法規申請。',
+    details: '建議攜帶醫師處方箋或藥品說明書。日本入境對於含有「偽麻黃鹼」或「可待因」之感冒藥有嚴格限制。',
+    source: {
+      title: '日本國海關 - 醫藥品輸入',
+      url: 'https://www.customs.go.jp/english/c-answer_e/imtsukan/1806_e.htm'
+    }
   },
   {
     id: 'reg4',
@@ -249,6 +261,10 @@ export const REGULATION_CATEGORIES: RegulationCategory[] = [
     icon: 'fa-coins',
     description: '出入境現金限額',
     details: '台灣出境：新台幣 10 萬元、人民幣 2 萬元、美金 1 萬元等值外幣。超過需申報，否則沒入。',
+    source: {
+      title: '財政部關務署 - 洗錢防制物品',
+      url: 'https://taipei.customs.gov.tw/singlehtml/3392?cntId=cus2_3392_3392_1355'
+    }
   },
   {
     id: 'reg5',
@@ -256,6 +272,10 @@ export const REGULATION_CATEGORIES: RegulationCategory[] = [
     icon: 'fa-utensils',
     description: '動植物檢疫規定',
     details: '請勿攜帶肉類製品 (含真空包裝)、新鮮蔬果、種子、土壤。泡麵建議檢查是否含肉塊。',
+    source: {
+      title: '農業部動植物防疫檢疫署',
+      url: 'https://www.aphia.gov.tw/ws.php?id=13034'
+    }
   },
 ];
 
@@ -268,6 +288,10 @@ export const REGULATION_RULES: RegulationRule[] = [
     decision: 'CONDITIONAL',
     summary: '必須手提，禁止託運',
     conditions: ['單顆電池不得超過 160Wh', '100Wh-160Wh 需航空公司同意'],
+    source: {
+      title: '民航局危險物品清單',
+      url: 'https://www.caa.gov.tw/Article.aspx?a=1055&lang=1'
+    }
   },
   {
     id: 'r2',
@@ -277,6 +301,10 @@ export const REGULATION_RULES: RegulationRule[] = [
     decision: 'CONDITIONAL',
     summary: '手提單瓶不得超過 100ml',
     conditions: ['超過 100ml 請託運', '需裝入 1 公升透明夾鏈袋'],
+    source: {
+      title: '民航局液體攜帶規定',
+      url: 'https://www.caa.gov.tw/Article.aspx?a=1055&lang=1'
+    }
   },
   {
     id: 'r3',
@@ -302,7 +330,11 @@ export const REGULATION_RULES: RegulationRule[] = [
     keywords: ['肉乾', '香腸', '火腿', '臘肉', '肉鬆', '泡麵'],
     decision: 'BANNED',
     summary: '多數國家禁止入境',
-    conditions: ['台灣入境嚴禁攜帶肉類製品'],
+    conditions: ['台灣入境嚴禁攜帶肉類製品', '日本入境亦嚴禁肉類'],
+    source: {
+      title: '防檢署 - 入境檢疫',
+      url: 'https://www.aphia.gov.tw/ws.php?id=13034'
+    }
   },
   {
     id: 'r6',
@@ -311,10 +343,14 @@ export const REGULATION_RULES: RegulationRule[] = [
     keywords: ['水果', '蔬菜', '種子', '植物', '土壤'],
     decision: 'BANNED',
     summary: '多數國家禁止入境',
+    source: {
+      title: '防檢署 - 植物檢疫',
+      url: 'https://www.aphia.gov.tw/ws.php?id=13034'
+    }
   },
   {
     id: 'r7',
-    name: '藥品',
+    name: '藥品 (一般/處方)',
     categoryId: 'reg3',
     keywords: ['藥品', '處方', '成藥', '藥水'],
     decision: 'CONDITIONAL',
@@ -328,7 +364,37 @@ export const REGULATION_RULES: RegulationRule[] = [
     keywords: ['現金', '外幣', '美元', '人民幣'],
     decision: 'CONDITIONAL',
     summary: '超過限額需申報',
+    source: {
+      title: '關務署 - 洗錢防制',
+      url: 'https://taipei.customs.gov.tw/singlehtml/3392?cntId=cus2_3392_3392_1355'
+    }
   },
+  {
+    id: 'r9',
+    name: '日本禁藥 (感冒藥)',
+    categoryId: 'reg3',
+    keywords: ['感冒藥', '鼻炎藥', '偽麻黃鹼', 'stimulant', 'Actifed', 'Sudafed'],
+    decision: 'BANNED',
+    summary: '含 Stimulant 原料之藥品禁止攜入日本',
+    conditions: ['含超過10% Pseudoephedrine 需事前申請', '含有 Codeine 需事前申請'],
+    source: {
+      title: '日本國海關 - 藥品規定',
+      url: 'https://www.customs.go.jp/english/c-answer_e/imtsukan/1806_e.htm'
+    }
+  },
+  {
+    id: 'r10',
+    name: '電子菸 / 加熱菸',
+    categoryId: 'reg2',
+    keywords: ['電子菸', '加熱菸', 'vape', 'iqos'],
+    decision: 'BANNED',
+    summary: '台灣全面禁止攜帶入境',
+    conditions: ['不論數量多寡，一律禁止', '違反者最高罰 500 萬元'],
+    source: {
+      title: '關務署 - 電子菸規定',
+      url: 'https://web.customs.gov.tw/singlehtml/3322?cntId=cus1_3322_3322_1355'
+    }
+  }
 ];
 
 export const RECOMMENDATION_ITEMS: RecommendationItem[] = [

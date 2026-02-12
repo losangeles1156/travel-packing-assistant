@@ -30,32 +30,32 @@ const RegulationsTab: React.FC = () => {
 
   return (
     <div className="max-w-2xl mx-auto pb-24">
-       <div className="mb-8 text-center">
-            <h2 className="text-2xl font-bold text-slate-800">法規查詢</h2>
-            <p className="text-slate-500 mt-2">點擊類別查看詳細規定，或輸入關鍵字快速查詢</p>
-       </div>
+      <div className="mb-8 text-center">
+        <h2 className="text-2xl font-bold text-slate-800">法規查詢</h2>
+        <p className="text-slate-500 mt-2">點擊類別查看詳細規定，或輸入關鍵字快速查詢</p>
+      </div>
 
-       <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 rounded-2xl shadow-lg mb-8 text-white">
-          <label className="block text-sm font-medium mb-2 opacity-90"><i className="fa-solid fa-magnifying-glass mr-2"></i>規則查詢</label>
-          <div className="flex gap-2">
-            <input 
-                type="text" 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="例如：行動電源、剪刀、藥品"
-                className="flex-1 p-3 rounded-lg text-slate-900 border-none outline-none focus:ring-2 focus:ring-white/50"
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            />
-            <button 
-                onClick={handleSearch}
-                className="bg-white/20 hover:bg-white/30 text-white px-6 py-3 rounded-lg font-bold transition"
-            >
-                查詢
-            </button>
-          </div>
-       </div>
+      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 rounded-2xl shadow-lg mb-8 text-white">
+        <label className="block text-sm font-medium mb-2 opacity-90"><i className="fa-solid fa-magnifying-glass mr-2"></i>規則查詢</label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="例如：行動電源、剪刀、藥品"
+            className="flex-1 p-3 rounded-lg text-slate-900 border-none outline-none focus:ring-2 focus:ring-white/50"
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+          />
+          <button
+            onClick={handleSearch}
+            className="bg-white/20 hover:bg-white/30 text-white px-6 py-3 rounded-lg font-bold transition"
+          >
+            查詢
+          </button>
+        </div>
+      </div>
 
-       {searchQuery.trim() && (
+      {searchQuery.trim() && (
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-8">
           <div className="text-sm font-bold text-slate-700 mb-4">查詢結果</div>
           {searchResults.length === 0 ? (
@@ -78,42 +78,69 @@ const RegulationsTab: React.FC = () => {
                       ))}
                     </div>
                   )}
+                  {rule.source && (
+                    <div className="mt-3 pt-3 border-t border-slate-100">
+                      <a
+                        href={rule.source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-500 hover:text-blue-600 flex items-center gap-1"
+                      >
+                        <i className="fa-solid fa-arrow-up-right-from-square"></i>
+                        資料來源：{rule.source.title}
+                      </a>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </div>
-       )}
+      )}
 
-       <div className="space-y-4">
-          {REGULATION_CATEGORIES.map(category => (
-            <div key={category.id} className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden transition-all hover:shadow-md">
-                <button 
-                    onClick={() => toggleExpand(category.id)}
-                    className="w-full flex items-center justify-between p-5 text-left"
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
-                            <i className={`fa-solid ${category.icon} text-lg`}></i>
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-slate-800">{category.name}</h3>
-                            <p className="text-sm text-slate-500">{category.description}</p>
-                        </div>
+      {/* Category List */}
+      <div className="space-y-4">
+        {REGULATION_CATEGORIES.map(category => (
+          <div key={category.id} className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden transition-all hover:shadow-md">
+            <button
+              onClick={() => toggleExpand(category.id)}
+              className="w-full flex items-center justify-between p-5 text-left"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
+                  <i className={`fa-solid ${category.icon} text-lg`}></i>
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800">{category.name}</h3>
+                  <p className="text-sm text-slate-500">{category.description}</p>
+                </div>
+              </div>
+              <i className={`fa-solid fa-chevron-down text-slate-400 transition-transform ${expandedId === category.id ? 'rotate-180' : ''}`}></i>
+            </button>
+
+            {expandedId === category.id && (
+              <div className="px-5 pb-5 pt-0">
+                <div className="bg-slate-50 p-4 rounded-lg text-slate-700 text-sm leading-relaxed border border-slate-100">
+                  {category.details}
+                  {category.source && (
+                    <div className="mt-3 pt-3 border-t border-slate-200">
+                      <a
+                        href={category.source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium"
+                      >
+                        <i className="fa-solid fa-link"></i>
+                        官方來源：{category.source.title}
+                      </a>
                     </div>
-                    <i className={`fa-solid fa-chevron-down text-slate-400 transition-transform ${expandedId === category.id ? 'rotate-180' : ''}`}></i>
-                </button>
-                
-                {expandedId === category.id && (
-                    <div className="px-5 pb-5 pt-0">
-                        <div className="bg-slate-50 p-4 rounded-lg text-slate-700 text-sm leading-relaxed border border-slate-100">
-                            {category.details}
-                        </div>
-                    </div>
-                )}
-            </div>
-          ))}
-       </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

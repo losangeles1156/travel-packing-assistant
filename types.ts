@@ -57,6 +57,10 @@ export interface RegulationCategory {
   icon: string;
   description: string;
   details: string;
+  source?: {
+    title: string;
+    url: string;
+  };
 }
 
 export type RegulationDecision = 'CARRY_ON' | 'CHECKED' | 'BANNED' | 'CONDITIONAL';
@@ -69,6 +73,10 @@ export interface RegulationRule {
   decision: RegulationDecision;
   summary: string;
   conditions?: string[];
+  source?: {
+    title: string;
+    url: string;
+  };
 }
 
 export interface RecommendationItem {
