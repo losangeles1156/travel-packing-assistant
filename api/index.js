@@ -362,6 +362,17 @@ api.post('/admin/cleanup', requireAdmin, async (_req, res) => {
   res.json({ ok: true, result: data });
 });
 
+app.get('/api/test-direct', (req, res) => {
+  res.json({ ok: true, message: 'Direct Express response' });
+});
+
 app.use('/api', api);
+app.use('/', api);
+
+// 404 handler for debugging
+app.use((req, res) => {
+  console.log(`404 at ${req.url}`);
+  res.status(404).json({ error: 'not_found', path: req.url });
+});
 
 export default app;
