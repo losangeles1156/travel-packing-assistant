@@ -1,4 +1,6 @@
 
+export const DEBUG_VERSION = 'v1.0.2-explicit-build';
+
 import { ItemCategory, LuggageRule, PackingItem, PreFlightTask, RedZoneWarning, RegulationCategory, RegulationRule, RecommendationItem } from './types';
 
 export const DEFAULT_DATABASE: Omit<PackingItem, 'quantity' | 'checked'>[] = [
