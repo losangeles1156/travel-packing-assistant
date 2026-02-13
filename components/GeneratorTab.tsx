@@ -1450,7 +1450,8 @@ const GeneratorTab: React.FC = () => {
               此分類無物品
             </div>
           )
-          </div>
+          }
+        </div>
 
         {/* Add Custom Item & Rule Selection */}
         <div className="p-6 bg-slate-50/80 border-t border-slate-100">
