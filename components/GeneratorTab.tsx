@@ -35,7 +35,7 @@ const GeneratorTab: React.FC = () => {
   const lastBlockingCountRef = useRef<number | null>(null);
   const noResultSearchRef = useRef<string>('');
   const searchTimerRef = useRef<number | null>(null);
-  
+
   // Step 0 Form State
   const [destination, setDestination] = useState('');
   const [tripCountry, setTripCountry] = useState<'JP' | 'KR' | 'SG' | 'VN' | 'TH'>('JP');
@@ -70,7 +70,7 @@ const GeneratorTab: React.FC = () => {
     const end = new Date(dates.end);
     const diffTime = end.getTime() - start.getTime();
     // Difference in days + 1 (inclusive)
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; 
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
     return diffDays > 0 ? diffDays : 0;
   }, [dates]);
 
@@ -82,30 +82,30 @@ const GeneratorTab: React.FC = () => {
     country: 'JP',
     direction: 'OUTBOUND',
   });
-  
+
   const [items, setItems] = useState<PackingItem[]>([]);
 
   // LIFTED STATE: Progress tracking (Tasks & Packing)
   // This ensures state is preserved when user hits "Back" from ResultView
   const [tasks, setTasks] = useState<PreFlightTask[]>(PRE_FLIGHT_TASKS);
   const [packedItemIds, setPackedItemIds] = useState<Set<string>>(new Set());
-  
+
   // Filter & Sort State
   const [activeCategory, setActiveCategory] = useState<ItemCategory | 'ALL'>('ALL');
   const [sortBy, setSortBy] = useState<'default' | 'name' | 'category' | 'rule' | 'weight'>('default');
   const [itemSearch, setItemSearch] = useState('');
-  
+
   // Custom item inputs
   const [customItemName, setCustomItemName] = useState('');
   const [customItemWeight, setCustomItemWeight] = useState('');
   const [customItemRule, setCustomItemRule] = useState<RuleType>(LuggageRule.FLEXIBLE_CHECKED);
-  
+
   // Custom Rules State
   const [customRuleDefs, setCustomRuleDefs] = useState<CustomRuleDef[]>([]);
   const [showRuleManager, setShowRuleManager] = useState(false);
 
   const customRuleById = useMemo(() => buildCustomRuleById(customRuleDefs), [customRuleDefs]);
-  
+
   // Rule Creator Form State
   const [newRuleName, setNewRuleName] = useState('');
   const [newRuleDesc, setNewRuleDesc] = useState('');
@@ -186,10 +186,10 @@ const GeneratorTab: React.FC = () => {
     const selectedTemplate = TRIP_TEMPLATES.find(t => t.id === selectedTemplateId) || null;
     const templateItems: PackingItem[] = selectedTemplate
       ? selectedTemplate.addItems.map(item => ({
-          ...item,
-          quantity: item.isDaily ? duration : 1,
-          checked: true,
-        }))
+        ...item,
+        quantity: item.isDaily ? duration : 1,
+        checked: true,
+      }))
       : [];
 
     const nextItems = [...baseItems, ...templateItems];
@@ -448,7 +448,7 @@ const GeneratorTab: React.FC = () => {
   };
 
   const handleToggleCheck = (id: string) => {
-    setItems(prev => prev.map(item => 
+    setItems(prev => prev.map(item =>
       item.id === id ? { ...item, checked: !item.checked } : item
     ));
   };
@@ -515,7 +515,7 @@ const GeneratorTab: React.FC = () => {
   const handleAddCustomItem = () => {
     if (!customItemName.trim()) return;
     const categoryToUse = activeCategory === 'ALL' ? ItemCategory.MISC : activeCategory;
-    
+
     const newItem: PackingItem = {
       id: `custom-${Date.now()}`,
       name: customItemName,
@@ -537,26 +537,26 @@ const GeneratorTab: React.FC = () => {
       weight: newItem.weight ?? null,
     });
   };
-  
-  const handleAddCustomRule = () => {
-      if (!newRuleName.trim()) return;
-      const newRule: CustomRuleDef = {
-          id: `rule-${Date.now()}`,
-          name: newRuleName,
-          description: newRuleDesc,
-          icon: newRuleIcon,
-          behavior: newRuleBehavior,
-          styleClass: newRuleColor
-      };
-      setCustomRuleDefs([...customRuleDefs, newRule]);
-      setNewRuleName('');
-      setNewRuleDesc('');
-      setShowRuleManager(false);
 
-      trackEvent('custom_rule_added', {
-        name: newRule.name,
-        behavior: newRule.behavior,
-      });
+  const handleAddCustomRule = () => {
+    if (!newRuleName.trim()) return;
+    const newRule: CustomRuleDef = {
+      id: `rule-${Date.now()}`,
+      name: newRuleName,
+      description: newRuleDesc,
+      icon: newRuleIcon,
+      behavior: newRuleBehavior,
+      styleClass: newRuleColor
+    };
+    setCustomRuleDefs([...customRuleDefs, newRule]);
+    setNewRuleName('');
+    setNewRuleDesc('');
+    setShowRuleManager(false);
+
+    trackEvent('custom_rule_added', {
+      name: newRule.name,
+      behavior: newRule.behavior,
+    });
   };
 
   const selectedItems = useMemo(
@@ -648,7 +648,7 @@ const GeneratorTab: React.FC = () => {
 
     // Filter
     if (activeCategory !== 'ALL') {
-        result = result.filter(i => i.category === activeCategory);
+      result = result.filter(i => i.category === activeCategory);
     }
 
     const q = itemSearch.trim().toLowerCase();
@@ -658,24 +658,24 @@ const GeneratorTab: React.FC = () => {
 
     // Sort
     if (sortBy !== 'default') {
-        result = [...result].sort((a, b) => {
-            if (sortBy === 'name') {
-                return a.name.localeCompare(b.name, 'zh-TW');
-            }
-            if (sortBy === 'category') {
-                const cats = Object.values(ItemCategory);
-                return cats.indexOf(a.category) - cats.indexOf(b.category);
-            }
-            if (sortBy === 'rule') {
-                // Simplified string comparison for rule sorting, could be improved
-                return String(a.rule).localeCompare(String(b.rule));
-            }
-            if (sortBy === 'weight') {
-                // Descending weight order (heaviest first)
-                return (b.weight || 0) - (a.weight || 0);
-            }
-            return 0;
-        });
+      result = [...result].sort((a, b) => {
+        if (sortBy === 'name') {
+          return a.name.localeCompare(b.name, 'zh-TW');
+        }
+        if (sortBy === 'category') {
+          const cats = Object.values(ItemCategory);
+          return cats.indexOf(a.category) - cats.indexOf(b.category);
+        }
+        if (sortBy === 'rule') {
+          // Simplified string comparison for rule sorting, could be improved
+          return String(a.rule).localeCompare(String(b.rule));
+        }
+        if (sortBy === 'weight') {
+          // Descending weight order (heaviest first)
+          return (b.weight || 0) - (a.weight || 0);
+        }
+        return 0;
+      });
     }
     return result;
   }, [items, activeCategory, itemSearch, sortBy]);
@@ -810,166 +810,166 @@ const GeneratorTab: React.FC = () => {
         )}
 
         <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
-            
-            {/* Hero Header */}
-            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 text-white text-center relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-                    <i className="fa-solid fa-earth-asia text-9xl absolute -top-4 -left-4"></i>
-                    <i className="fa-solid fa-plane text-8xl absolute bottom-4 right-4 transform rotate-[-20deg]"></i>
-                </div>
-                
-                <div className="relative z-10">
-                    <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner border border-white/30">
-                        <i className="fa-solid fa-suitcase-rolling text-3xl"></i>
-                    </div>
-                    <h2 className="text-2xl font-bold tracking-tight">準備好出發了嗎？</h2>
-                    <p className="text-blue-100 mt-2 text-sm font-light">輸入目的地與日期，立即生成您的專屬清單</p>
-                </div>
+
+          {/* Hero Header */}
+          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 text-white text-center relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+              <i className="fa-solid fa-earth-asia text-9xl absolute -top-4 -left-4"></i>
+              <i className="fa-solid fa-plane text-8xl absolute bottom-4 right-4 transform rotate-[-20deg]"></i>
             </div>
 
-            {/* Form Body */}
-            <div className="p-8 space-y-8">
-                <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">旅程模板 Templates</label>
-                        {selectedTemplateId && (
-                          <button
-                            onClick={() => handleTemplatePick(selectedTemplateId)}
-                            className="text-xs font-bold text-slate-500 hover:text-blue-600"
-                          >
-                            清除
-                          </button>
-                        )}
-                    </div>
-                    <div className="flex gap-3 overflow-x-auto pb-1">
-                        {TRIP_TEMPLATES.map(t => {
-                          const active = selectedTemplateId === t.id;
-                          return (
-                            <button
-                              key={t.id}
-                              onClick={() => handleTemplatePick(t.id)}
-                              className={`flex-shrink-0 w-44 rounded-2xl border px-4 py-3 text-left transition shadow-sm hover:shadow ${active ? 'bg-slate-900 text-white border-slate-900' : `${t.style} hover:-translate-y-0.5`}`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${active ? 'bg-white/15 text-white' : 'bg-white/60 text-slate-700'}`}>
-                                  <i className={`fa-solid ${t.icon}`}></i>
-                                </span>
-                                <div className="min-w-0">
-                                  <div className={`font-black truncate ${active ? 'text-white' : 'text-slate-900'}`}>{t.name}</div>
-                                  <div className={`text-xs mt-0.5 truncate ${active ? 'text-white/70' : 'text-slate-600'}`}>{t.tagline}</div>
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                    </div>
-                </div>
+            <div className="relative z-10">
+              <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner border border-white/30">
+                <i className="fa-solid fa-suitcase-rolling text-3xl"></i>
+              </div>
+              <h2 className="text-2xl font-bold tracking-tight">準備好出發了嗎？</h2>
+              <p className="text-blue-100 mt-2 text-sm font-light">輸入目的地與日期，立即生成您的專屬清單</p>
+            </div>
+          </div>
 
-                {/* Destination Input */}
-                <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">適用規則 Scope</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <select
-                        value={tripCountry}
-                        onChange={(e) => setTripCountry(e.target.value as 'JP' | 'KR' | 'SG' | 'VN' | 'TH')}
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl py-3 px-4 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition-all"
-                      >
-                        {SUPPORTED_COUNTRIES.map(c => (
-                          <option key={c.code} value={c.code}>{c.name}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={tripDirection}
-                        onChange={(e) => setTripDirection(e.target.value as 'OUTBOUND' | 'INBOUND')}
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl py-3 px-4 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition-all"
-                      >
-                        {SUPPORTED_DIRECTIONS.map(d => (
-                          <option key={d.code} value={d.code}>{d.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                </div>
-
-                <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">目的地 Destination</label>
-                    <div className="relative group">
-                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors">
-                            <i className="fa-solid fa-location-dot text-lg"></i>
+          {/* Form Body */}
+          <div className="p-8 space-y-8">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">旅程模板 Templates</label>
+                {selectedTemplateId && (
+                  <button
+                    onClick={() => handleTemplatePick(selectedTemplateId)}
+                    className="text-xs font-bold text-slate-500 hover:text-blue-600"
+                  >
+                    清除
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {TRIP_TEMPLATES.map(t => {
+                  const active = selectedTemplateId === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => handleTemplatePick(t.id)}
+                      className={`flex-shrink-0 w-44 rounded-2xl border px-4 py-3 text-left transition shadow-sm hover:shadow ${active ? 'bg-slate-900 text-white border-slate-900' : `${t.style} hover:-translate-y-0.5`}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${active ? 'bg-white/15 text-white' : 'bg-white/60 text-slate-700'}`}>
+                          <i className={`fa-solid ${t.icon}`}></i>
+                        </span>
+                        <div className="min-w-0">
+                          <div className={`font-black truncate ${active ? 'text-white' : 'text-slate-900'}`}>{t.name}</div>
+                          <div className={`text-xs mt-0.5 truncate ${active ? 'text-white/70' : 'text-slate-600'}`}>{t.tagline}</div>
                         </div>
-                        <input 
-                            type="text" 
-                            className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl py-4 pl-12 pr-4 text-lg font-medium text-slate-800 placeholder-slate-400 outline-none focus:border-blue-500 focus:bg-white transition-all"
-                            placeholder="例如：東京, 日本"
-                            value={destination}
-                            onChange={(e) => setDestination(e.target.value)}
-                        />
-                    </div>
-                </div>
-                
-                {/* Date Range Input */}
-                <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex justify-between items-center">
-                        <span>日期 Dates</span>
-                        {duration > 0 && (
-                            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                                共 {duration} 天
-                            </span>
-                        )}
-                    </label>
-                    
-                    <div className="flex flex-col sm:flex-row border-2 border-slate-100 rounded-xl overflow-hidden bg-slate-50">
-                        {/* Start Date */}
-                        <div className="flex-1 relative border-b sm:border-b-0 sm:border-r border-slate-200 p-3 hover:bg-white transition-colors focus-within:bg-white group">
-                            <label className="block text-[10px] font-bold text-slate-400 mb-1 group-focus-within:text-blue-500">去程 CHECK-IN</label>
-                            <input 
-                                type="date" 
-                                className="w-full bg-transparent outline-none text-slate-800 font-semibold font-mono"
-                                value={dates.start}
-                                onChange={(e) => setDates(p => ({...p, start: e.target.value}))}
-                            />
-                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-                        {/* End Date */}
-                        <div className="flex-1 relative p-3 hover:bg-white transition-colors focus-within:bg-white group">
-                            <label className="block text-[10px] font-bold text-slate-400 mb-1 group-focus-within:text-blue-500">回程 CHECK-OUT</label>
-                            <input 
-                                type="date" 
-                                className="w-full bg-transparent outline-none text-slate-800 font-semibold font-mono"
-                                min={dates.start}
-                                value={dates.end}
-                                onChange={(e) => setDates(p => ({...p, end: e.target.value}))}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {[2, 3, 5, 7, 10].map(d => (
-                        <button
-                          key={d}
-                          onClick={() => setDurationDays(d)}
-                          className="px-3 py-1.5 rounded-full text-xs font-black border border-slate-200 text-slate-600 bg-white hover:border-blue-300 hover:text-blue-700 transition"
-                        >
-                          {d} 天
-                        </button>
-                      ))}
-                    </div>
-                </div>
-
-                {/* Generate Button */}
-                <button 
-                    onClick={handleStart}
-                    className="w-full group relative overflow-hidden bg-slate-900 text-white rounded-xl py-4 font-bold text-lg shadow-lg shadow-slate-200 hover:shadow-slate-300 hover:-translate-y-0.5 transition-all active:translate-y-0 active:shadow-sm"
+            {/* Destination Input */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">適用規則 Scope</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <select
+                  value={tripCountry}
+                  onChange={(e) => setTripCountry(e.target.value as 'JP' | 'KR' | 'SG' | 'VN' | 'TH')}
+                  className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl py-3 px-4 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition-all"
                 >
-                    <span className="relative z-10 flex items-center justify-center gap-2">
-                        建立行李清單 <i className="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
-                    </span>
-                    <div className="absolute inset-0 bg-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                </button>
+                  {SUPPORTED_COUNTRIES.map(c => (
+                    <option key={c.code} value={c.code}>{c.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={tripDirection}
+                  onChange={(e) => setTripDirection(e.target.value as 'OUTBOUND' | 'INBOUND')}
+                  className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl py-3 px-4 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition-all"
+                >
+                  {SUPPORTED_DIRECTIONS.map(d => (
+                    <option key={d.code} value={d.code}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">目的地 Destination</label>
+              <div className="relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors">
+                  <i className="fa-solid fa-location-dot text-lg"></i>
+                </div>
+                <input
+                  type="text"
+                  className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl py-4 pl-12 pr-4 text-lg font-medium text-slate-800 placeholder-slate-400 outline-none focus:border-blue-500 focus:bg-white transition-all"
+                  placeholder="例如：東京, 日本"
+                  value={destination}
+                  onChange={(e) => setDestination(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Date Range Input */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex justify-between items-center">
+                <span>日期 Dates</span>
+                {duration > 0 && (
+                  <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                    共 {duration} 天
+                  </span>
+                )}
+              </label>
+
+              <div className="flex flex-col sm:flex-row border-2 border-slate-100 rounded-xl overflow-hidden bg-slate-50">
+                {/* Start Date */}
+                <div className="flex-1 relative border-b sm:border-b-0 sm:border-r border-slate-200 p-3 hover:bg-white transition-colors focus-within:bg-white group">
+                  <label className="block text-[10px] font-bold text-slate-400 mb-1 group-focus-within:text-blue-500">去程 CHECK-IN</label>
+                  <input
+                    type="date"
+                    className="w-full bg-transparent outline-none text-slate-800 font-semibold font-mono"
+                    value={dates.start}
+                    onChange={(e) => setDates(p => ({ ...p, start: e.target.value }))}
+                  />
+                </div>
+
+                {/* End Date */}
+                <div className="flex-1 relative p-3 hover:bg-white transition-colors focus-within:bg-white group">
+                  <label className="block text-[10px] font-bold text-slate-400 mb-1 group-focus-within:text-blue-500">回程 CHECK-OUT</label>
+                  <input
+                    type="date"
+                    className="w-full bg-transparent outline-none text-slate-800 font-semibold font-mono"
+                    min={dates.start}
+                    value={dates.end}
+                    onChange={(e) => setDates(p => ({ ...p, end: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {[2, 3, 5, 7, 10].map(d => (
+                  <button
+                    key={d}
+                    onClick={() => setDurationDays(d)}
+                    className="px-3 py-1.5 rounded-full text-xs font-black border border-slate-200 text-slate-600 bg-white hover:border-blue-300 hover:text-blue-700 transition"
+                  >
+                    {d} 天
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Generate Button */}
+            <button
+              onClick={handleStart}
+              className="w-full group relative overflow-hidden bg-slate-900 text-white rounded-xl py-4 font-bold text-lg shadow-lg shadow-slate-200 hover:shadow-slate-300 hover:-translate-y-0.5 transition-all active:translate-y-0 active:shadow-sm"
+            >
+              <span className="relative z-10 flex items-center justify-center gap-2">
+                建立行李清單 <i className="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+              </span>
+              <div className="absolute inset-0 bg-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            </button>
+          </div>
         </div>
-        
+
         <div className="text-center mt-6 text-slate-400 text-sm">
-             <i className="fa-solid fa-shield-cat mr-1"></i> 智慧分類 • 自動建議 • 風險提醒
+          <i className="fa-solid fa-shield-cat mr-1"></i> 智慧分類 • 自動建議 • 風險提醒
         </div>
       </div>
     );
@@ -978,389 +978,388 @@ const GeneratorTab: React.FC = () => {
   // Step 2: Result View
   if (step === 2) {
     return (
-        <ResultView 
-            items={selectedItems} 
-            tripDetails={finalTripDetails} 
-            onBack={() => setStep(1)} 
-            onNewTrip={resetToNewTrip}
-            onShare={handleShare}
-            customRules={customRuleDefs} 
-            tasks={tasks} // Pass lifted state
-            setTasks={setTasks} // Pass setter
-            packedItemIds={packedItemIds} // Pass lifted state
-            setPackedItemIds={setPackedItemIds} // Pass setter
-        />
+      <ResultView
+        items={selectedItems}
+        tripDetails={finalTripDetails}
+        onBack={() => setStep(1)}
+        onNewTrip={resetToNewTrip}
+        onShare={handleShare}
+        customRules={customRuleDefs}
+        tasks={tasks} // Pass lifted state
+        setTasks={setTasks} // Pass setter
+        packedItemIds={packedItemIds} // Pass lifted state
+        setPackedItemIds={setPackedItemIds} // Pass setter
+      />
     );
   }
 
   // Step 1: Customize List
   return (
     <div className="max-w-4xl mx-auto pb-36 md:pb-24">
-       {/* Step 1 Header */}
-       <div className="bg-white p-6 rounded-2xl shadow-lg shadow-slate-200/50 mb-6 sticky top-4 z-10 border border-slate-100">
-          <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
-            <div>
-                <h2 className="text-2xl font-bold text-slate-800">客製化您的清單</h2>
-                <p className="text-sm text-slate-500">系統已為 {duration} 天的 {destination} 之旅預選物品</p>
-                <div className="mt-2 text-xs text-slate-500 font-bold">
-                  {SUPPORTED_COUNTRIES.find(c => c.code === tripCountry)?.name || tripCountry} ・
-                  {SUPPORTED_DIRECTIONS.find(d => d.code === tripDirection)?.name || tripDirection}
-                </div>
+      {/* Step 1 Header */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg shadow-slate-200/50 mb-6 sticky top-4 z-10 border border-slate-100">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-800">客製化您的清單</h2>
+            <p className="text-sm text-slate-500">系統已為 {duration} 天的 {destination} 之旅預選物品</p>
+            <div className="mt-2 text-xs text-slate-500 font-bold">
+              {SUPPORTED_COUNTRIES.find(c => c.code === tripCountry)?.name || tripCountry} ・
+              {SUPPORTED_DIRECTIONS.find(d => d.code === tripDirection)?.name || tripDirection}
             </div>
-            <div className="flex gap-2">
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={resetToNewTrip}
+              className="bg-white text-slate-700 px-4 py-3 rounded-xl font-bold border border-slate-200 hover:border-blue-300 hover:text-blue-700 transition shadow-sm flex items-center justify-center gap-2"
+            >
+              新旅程 <i className="fa-solid fa-plus"></i>
+            </button>
+            <button
+              onClick={handleFinish}
+              disabled={riskReport.summary.blocking > 0}
+              className={`hidden md:flex px-6 py-3 rounded-xl font-bold transition shadow-lg items-center justify-center gap-2 ${riskReport.summary.blocking > 0
+                  ? 'bg-slate-200 text-slate-400 shadow-slate-100 cursor-not-allowed'
+                  : 'bg-slate-900 text-white hover:bg-blue-600 shadow-slate-200'
+                }`}
+            >
+              {riskReport.summary.blocking > 0 ? `先排除高風險 (${riskReport.summary.blocking})` : '完成並歸類'} <i className="fa-solid fa-check-circle"></i>
+            </button>
+          </div>
+        </div>
+        <div className="mb-5 rounded-2xl border border-rose-300 bg-gradient-to-r from-rose-50 via-red-50 to-orange-50 px-4 py-3 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-black text-rose-800">
+                <i className="fa-solid fa-gavel mr-2" />
+                {riskBannerCopy.title}
+              </div>
+              <div className="mt-1 text-xs font-bold text-rose-700">
+                {riskBannerCopy.description}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {riskBannerCopy.badges.map((badge: string, idx: number) => (
+                <span
+                  key={`${badge}-${idx}`}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-black ${idx === 0 ? 'bg-rose-700 text-white' : 'bg-red-700 text-white'
+                    }`}
+                >
+                  {badge}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={() => handleRiskCopyVariantChange('serious')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-black border transition ${riskCopyVariant === 'serious'
+                  ? 'border-rose-700 bg-rose-700 text-white'
+                  : 'border-rose-300 bg-white text-rose-700 hover:bg-rose-100'
+                }`}
+            >
+              法規嚴肅版
+            </button>
+            <button
+              onClick={() => handleRiskCopyVariantChange('friendly')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-black border transition ${riskCopyVariant === 'friendly'
+                  ? 'border-rose-700 bg-rose-700 text-white'
+                  : 'border-rose-300 bg-white text-rose-700 hover:bg-rose-100'
+                }`}
+            >
+              旅客易懂版
+            </button>
+          </div>
+        </div>
+
+        <div
+          className={`mb-5 rounded-2xl border p-4 ${riskReport.summary.blocking > 0
+              ? 'border-red-300 bg-red-50'
+              : riskReport.summary.total > 0
+                ? 'border-amber-300 bg-amber-50'
+                : 'border-emerald-300 bg-emerald-50'
+            }`}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className={`text-sm font-black ${riskReport.summary.blocking > 0 ? 'text-red-700' : 'text-slate-800'}`}>
+                <i className="fa-solid fa-shield-halved mr-2"></i>出入境風險檢查
+              </div>
+              <div className="mt-1 text-[11px] text-slate-500">
+                規則版本 {RISK_RULESET_META.version}（{RISK_RULESET_META.updatedAt}）・審核：{RISK_RULESET_META.reviewedBy}
+              </div>
+              <div className="text-[11px] text-slate-500">{RISK_RULESET_META.notes}</div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-red-100 text-red-700">
+                Critical {riskReport.summary.critical}
+              </span>
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-orange-100 text-orange-700">
+                High {riskReport.summary.high}
+              </span>
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-100 text-amber-700">
+                Medium {riskReport.summary.medium}
+              </span>
+            </div>
+          </div>
+
+          <div className={`mt-3 rounded-xl border px-3 py-2 text-sm font-bold ${riskReport.summary.blocking > 0
+              ? 'border-red-200 bg-red-100/60 text-red-700'
+              : 'border-emerald-200 bg-emerald-100/70 text-emerald-700'
+            }`}>
+            {riskReport.summary.blocking > 0
+              ? `尚有 ${riskReport.summary.blocking} 個高風險項目，請先處理再完成。`
+              : '高風險已清零，可安全完成歸類。'}
+          </div>
+          {riskReport.summary.blocking > 0 && (
+            <div className="mt-2 text-xs font-semibold text-red-700">
+              為什麼這很重要：高風險項目可能在安檢被沒收、延誤登機，嚴重時會有罰款或法律責任。
+            </div>
+          )}
+          {riskReport.summary.blocking > 0 && topBlockingIssue?.penalty && (
+            <div className="mt-2 rounded-xl border border-red-300 bg-red-50 px-3 py-2.5 text-xs font-black text-red-800">
+              <i className="fa-solid fa-triangle-exclamation mr-1.5" />
+              最高風險可能後果：{topBlockingIssue.penalty.replace(/^可能後果：/, '')}
+            </div>
+          )}
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {riskReport.summary.blocking > 0 && (
               <button
-                onClick={resetToNewTrip}
-                className="bg-white text-slate-700 px-4 py-3 rounded-xl font-bold border border-slate-200 hover:border-blue-300 hover:text-blue-700 transition shadow-sm flex items-center justify-center gap-2"
+                onClick={resolveAllBlockingRisks}
+                className="text-xs font-black px-3 py-2 rounded-lg border border-red-200 bg-white text-red-700 hover:bg-red-100 transition"
               >
-                新旅程 <i className="fa-solid fa-plus"></i>
+                一鍵處理全部高風險（自動套用建議）
               </button>
-              <button 
-                  onClick={handleFinish}
-                  disabled={riskReport.summary.blocking > 0}
-                  className={`hidden md:flex px-6 py-3 rounded-xl font-bold transition shadow-lg items-center justify-center gap-2 ${
-                    riskReport.summary.blocking > 0
-                      ? 'bg-slate-200 text-slate-400 shadow-slate-100 cursor-not-allowed'
-                      : 'bg-slate-900 text-white hover:bg-blue-600 shadow-slate-200'
+            )}
+            {lastBulkResolveSnapshot && (
+              <button
+                onClick={undoBulkRiskResolution}
+                className="text-xs font-black px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition"
+              >
+                復原上一批處理
+              </button>
+            )}
+          </div>
+
+          {lastBulkResolveSnapshot && (
+            <div className="mt-2 text-[11px] font-semibold text-slate-600">
+              已自動處理 {lastBulkResolveCount} 筆高風險項目，如需可立即復原。
+            </div>
+          )}
+
+          {sortedRiskIssues.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {sortedRiskIssues.slice(0, 6).map((issue) => {
+                const issueKey = `${issue.itemId}-${issue.type}`;
+                const isExpanded = expandedRiskKey === issueKey;
+                const defaultAction = getDefaultRiskAction(issue);
+                const consequenceClass =
+                  issue.consequenceLevel === 'LEGAL'
+                    ? 'bg-rose-700 text-white'
+                    : issue.consequenceLevel === 'FINE'
+                      ? 'bg-red-700 text-white'
+                      : issue.consequenceLevel === 'CONFISCATION'
+                        ? 'bg-orange-200 text-orange-900'
+                        : 'bg-amber-200 text-amber-900';
+                const cardClass =
+                  issue.consequenceLevel === 'LEGAL'
+                    ? 'border-rose-300 bg-rose-50/95 shadow-md shadow-rose-100'
+                    : issue.consequenceLevel === 'FINE'
+                      ? 'border-red-300 bg-red-50/95 shadow-md shadow-red-100'
+                      : issue.consequenceLevel === 'CONFISCATION'
+                        ? 'border-orange-300 bg-orange-50/90'
+                        : 'border-amber-200 bg-amber-50/85';
+                const severityClass =
+                  issue.severity === 'Critical'
+                    ? 'bg-red-100 text-red-700'
+                    : issue.severity === 'High'
+                      ? 'bg-orange-100 text-orange-700'
+                      : 'bg-amber-100 text-amber-700';
+
+                return (
+                  <div key={issueKey} className={`rounded-xl border px-3 py-2.5 ${cardClass}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`px-2 py-0.5 rounded-full text-[11px] font-black ${consequenceClass}`}>
+                            {getConsequenceLabel(issue.consequenceLevel)}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[11px] font-black ${severityClass}`}>
+                            {issue.severity}
+                          </span>
+                          <span className="text-xs font-black text-slate-800 truncate">{issue.itemName}</span>
+                        </div>
+                        <div className="mt-1 text-xs text-slate-600">{issue.reason}</div>
+                        <div className="mt-1 text-[11px] font-bold text-slate-700">建議：{issue.action}</div>
+                        {issue.penalty && (
+                          <div className="mt-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-black text-red-700">
+                            可能後果：{issue.penalty.replace(/^可能後果：/, '')}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          onClick={() => resolveRiskIssue(issue, defaultAction)}
+                          className="text-xs font-black px-2.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                        >
+                          {defaultAction === 'MOVE_TO_CARRY_ON'
+                            ? '改為手提'
+                            : defaultAction === 'MOVE_TO_CHECKED'
+                              ? '改為託運'
+                              : '移除項目'}
+                        </button>
+                        <button
+                          onClick={() => setExpandedRiskKey(isExpanded ? null : issueKey)}
+                          className="text-xs font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                        >
+                          {isExpanded ? '收合' : '詳情'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-500 space-y-1">
+                        <div>規則 ID：{issue.ruleId}</div>
+                        <div>命中詞：{issue.matchedKeyword || '-'}（{issue.matchedFrom === 'synonym' ? '同義詞' : '關鍵字'}）</div>
+                        <div>依據：{issue.source}</div>
+                        <div>後果等級：{getConsequenceLabel(issue.consequenceLevel)}</div>
+                        <div>可能後果：{issue.penalty || '-'}</div>
+                        <div>
+                          適用：{(issue.appliesCountries || []).map((code: string) => countryNameByCode.get(code) || code).join('/')}
+                          {' '}・方向：{(issue.appliesDirections || []).map((code: string) => directionNameByCode.get(code) || code).join('/')}
+                        </div>
+                        <div>更新：{issue.ruleUpdatedAt || '-'} ・信心值：{typeof issue.ruleConfidence === 'number' ? issue.ruleConfidence.toFixed(2) : '-'}</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {sortedRiskIssues.length > 6 && (
+                <div className="text-xs text-slate-500">尚有 {sortedRiskIssues.length - 6} 筆風險項目。</div>
+              )}
+            </div>
+          )}
+
+          {riskGateTouched && riskReport.summary.blocking > 0 && (
+            <div className="mt-3 text-xs font-bold text-red-600">
+              產品核心：先清除違規風險，再進入最終清單。
+            </div>
+          )}
+        </div>
+
+        {/* Sorting Options */}
+        <div className="flex items-center gap-3 mb-4 overflow-x-auto pb-1 scrollbar-hide">
+          <span className="text-xs font-bold text-slate-400 whitespace-nowrap">排序方式：</span>
+          <button
+            onClick={() => setSortBy('default')}
+            className={`px-3 py-1 text-xs font-bold rounded-md transition ${sortBy === 'default' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+          >
+            預設
+          </button>
+          <button
+            onClick={() => setSortBy('name')}
+            className={`px-3 py-1 text-xs font-bold rounded-md transition ${sortBy === 'name' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+          >
+            名稱
+          </button>
+          <button
+            onClick={() => setSortBy('category')}
+            className={`px-3 py-1 text-xs font-bold rounded-md transition ${sortBy === 'category' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+          >
+            類別
+          </button>
+          <button
+            onClick={() => setSortBy('rule')}
+            className={`px-3 py-1 text-xs font-bold rounded-md transition ${sortBy === 'rule' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+          >
+            行李規則
+          </button>
+          <button
+            onClick={() => setSortBy('weight')}
+            className={`px-3 py-1 text-xs font-bold rounded-md transition ${sortBy === 'weight' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+          >
+            重量
+          </button>
+        </div>
+
+        {/* Sticky Header Control Group */}
+        <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md pt-4 pb-2 px-4 -mx-4 border-b border-slate-100 mb-4 transition-all shadow-sm">
+          {/* 1. Search Bar (Top Priority) */}
+          <div className="relative mb-3">
+            <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input
+              type="text"
+              placeholder="搜尋物品（名稱）..."
+              value={itemSearch}
+              onChange={(e) => setItemSearch(e.target.value)}
+              className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+            />
+            {itemSearch.trim() && (
+              <button
+                onClick={() => setItemSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                aria-label="清除搜尋"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            {/* 2. Category Tabs (Scrollable) */}
+            <div className="flex overflow-x-auto gap-2 pb-1 scrollbar-hide mask-linear-fade flex-1 min-w-0">
+              <button
+                onClick={() => setActiveCategory('ALL')}
+                className={`px-4 py-2 rounded-full whitespace-nowrap text-xs font-bold transition-all flex items-center gap-1.5 ${activeCategory === 'ALL'
+                    ? 'bg-slate-800 text-white shadow-md shadow-slate-200'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100'
                   }`}
               >
-                  {riskReport.summary.blocking > 0 ? `先排除高風險 (${riskReport.summary.blocking})` : '完成並歸類'} <i className="fa-solid fa-check-circle"></i>
-              </button>
-            </div>
-	          </div>
-          <div className="mb-5 rounded-2xl border border-rose-300 bg-gradient-to-r from-rose-50 via-red-50 to-orange-50 px-4 py-3 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-black text-rose-800">
-                  <i className="fa-solid fa-gavel mr-2" />
-                  {riskBannerCopy.title}
-                </div>
-                <div className="mt-1 text-xs font-bold text-rose-700">
-                  {riskBannerCopy.description}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {riskBannerCopy.badges.map((badge: string, idx: number) => (
-                  <span
-                    key={`${badge}-${idx}`}
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-black ${
-                      idx === 0 ? 'bg-rose-700 text-white' : 'bg-red-700 text-white'
-                    }`}
-                  >
-                    {badge}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="mt-3 flex gap-2">
-              <button
-                onClick={() => handleRiskCopyVariantChange('serious')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black border transition ${
-                  riskCopyVariant === 'serious'
-                    ? 'border-rose-700 bg-rose-700 text-white'
-                    : 'border-rose-300 bg-white text-rose-700 hover:bg-rose-100'
-                }`}
-              >
-                法規嚴肅版
-              </button>
-              <button
-                onClick={() => handleRiskCopyVariantChange('friendly')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black border transition ${
-                  riskCopyVariant === 'friendly'
-                    ? 'border-rose-700 bg-rose-700 text-white'
-                    : 'border-rose-300 bg-white text-rose-700 hover:bg-rose-100'
-                }`}
-              >
-                旅客易懂版
-              </button>
-            </div>
-          </div>
-
-	          <div
-	            className={`mb-5 rounded-2xl border p-4 ${
-              riskReport.summary.blocking > 0
-                ? 'border-red-300 bg-red-50'
-                : riskReport.summary.total > 0
-                  ? 'border-amber-300 bg-amber-50'
-                  : 'border-emerald-300 bg-emerald-50'
-            }`}
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className={`text-sm font-black ${riskReport.summary.blocking > 0 ? 'text-red-700' : 'text-slate-800'}`}>
-                  <i className="fa-solid fa-shield-halved mr-2"></i>出入境風險檢查
-                </div>
-                <div className="mt-1 text-[11px] text-slate-500">
-                  規則版本 {RISK_RULESET_META.version}（{RISK_RULESET_META.updatedAt}）・審核：{RISK_RULESET_META.reviewedBy}
-                </div>
-                <div className="text-[11px] text-slate-500">{RISK_RULESET_META.notes}</div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-red-100 text-red-700">
-                  Critical {riskReport.summary.critical}
-                </span>
-                <span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-orange-100 text-orange-700">
-                  High {riskReport.summary.high}
-                </span>
-                <span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-100 text-amber-700">
-                  Medium {riskReport.summary.medium}
-                </span>
-              </div>
-            </div>
-
-            <div className={`mt-3 rounded-xl border px-3 py-2 text-sm font-bold ${
-              riskReport.summary.blocking > 0
-                ? 'border-red-200 bg-red-100/60 text-red-700'
-                : 'border-emerald-200 bg-emerald-100/70 text-emerald-700'
-            }`}>
-              {riskReport.summary.blocking > 0
-                ? `尚有 ${riskReport.summary.blocking} 個高風險項目，請先處理再完成。`
-                : '高風險已清零，可安全完成歸類。'}
-            </div>
-            {riskReport.summary.blocking > 0 && (
-              <div className="mt-2 text-xs font-semibold text-red-700">
-                為什麼這很重要：高風險項目可能在安檢被沒收、延誤登機，嚴重時會有罰款或法律責任。
-              </div>
-            )}
-            {riskReport.summary.blocking > 0 && topBlockingIssue?.penalty && (
-              <div className="mt-2 rounded-xl border border-red-300 bg-red-50 px-3 py-2.5 text-xs font-black text-red-800">
-                <i className="fa-solid fa-triangle-exclamation mr-1.5" />
-                最高風險可能後果：{topBlockingIssue.penalty.replace(/^可能後果：/, '')}
-              </div>
-            )}
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {riskReport.summary.blocking > 0 && (
-                <button
-                  onClick={resolveAllBlockingRisks}
-                  className="text-xs font-black px-3 py-2 rounded-lg border border-red-200 bg-white text-red-700 hover:bg-red-100 transition"
-                >
-                  一鍵處理全部高風險（自動套用建議）
-                </button>
-              )}
-              {lastBulkResolveSnapshot && (
-                <button
-                  onClick={undoBulkRiskResolution}
-                  className="text-xs font-black px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition"
-                >
-                  復原上一批處理
-                </button>
-              )}
-            </div>
-
-            {lastBulkResolveSnapshot && (
-              <div className="mt-2 text-[11px] font-semibold text-slate-600">
-                已自動處理 {lastBulkResolveCount} 筆高風險項目，如需可立即復原。
-              </div>
-            )}
-
-            {sortedRiskIssues.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {sortedRiskIssues.slice(0, 6).map((issue) => {
-                  const issueKey = `${issue.itemId}-${issue.type}`;
-                  const isExpanded = expandedRiskKey === issueKey;
-                  const defaultAction = getDefaultRiskAction(issue);
-                  const consequenceClass =
-                    issue.consequenceLevel === 'LEGAL'
-                      ? 'bg-rose-700 text-white'
-                      : issue.consequenceLevel === 'FINE'
-                        ? 'bg-red-700 text-white'
-                        : issue.consequenceLevel === 'CONFISCATION'
-                          ? 'bg-orange-200 text-orange-900'
-                          : 'bg-amber-200 text-amber-900';
-                  const cardClass =
-                    issue.consequenceLevel === 'LEGAL'
-                      ? 'border-rose-300 bg-rose-50/95 shadow-md shadow-rose-100'
-                      : issue.consequenceLevel === 'FINE'
-                        ? 'border-red-300 bg-red-50/95 shadow-md shadow-red-100'
-                        : issue.consequenceLevel === 'CONFISCATION'
-                          ? 'border-orange-300 bg-orange-50/90'
-                          : 'border-amber-200 bg-amber-50/85';
-                  const severityClass =
-                    issue.severity === 'Critical'
-                      ? 'bg-red-100 text-red-700'
-                      : issue.severity === 'High'
-                        ? 'bg-orange-100 text-orange-700'
-                        : 'bg-amber-100 text-amber-700';
-
-                  return (
-                    <div key={issueKey} className={`rounded-xl border px-3 py-2.5 ${cardClass}`}>
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`px-2 py-0.5 rounded-full text-[11px] font-black ${consequenceClass}`}>
-                              {getConsequenceLabel(issue.consequenceLevel)}
-                            </span>
-                            <span className={`px-2 py-0.5 rounded-full text-[11px] font-black ${severityClass}`}>
-                              {issue.severity}
-                            </span>
-                            <span className="text-xs font-black text-slate-800 truncate">{issue.itemName}</span>
-                          </div>
-                          <div className="mt-1 text-xs text-slate-600">{issue.reason}</div>
-                          <div className="mt-1 text-[11px] font-bold text-slate-700">建議：{issue.action}</div>
-                          {issue.penalty && (
-                            <div className="mt-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-black text-red-700">
-                              可能後果：{issue.penalty.replace(/^可能後果：/, '')}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex gap-2 shrink-0">
-                          <button
-                            onClick={() => resolveRiskIssue(issue, defaultAction)}
-                            className="text-xs font-black px-2.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                          >
-                            {defaultAction === 'MOVE_TO_CARRY_ON'
-                              ? '改為手提'
-                              : defaultAction === 'MOVE_TO_CHECKED'
-                                ? '改為託運'
-                                : '移除項目'}
-                          </button>
-                          <button
-                            onClick={() => setExpandedRiskKey(isExpanded ? null : issueKey)}
-                            className="text-xs font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
-                          >
-                            {isExpanded ? '收合' : '詳情'}
-                          </button>
-                        </div>
-                      </div>
-
-                      {isExpanded && (
-                        <div className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-500 space-y-1">
-                          <div>規則 ID：{issue.ruleId}</div>
-                          <div>命中詞：{issue.matchedKeyword || '-'}（{issue.matchedFrom === 'synonym' ? '同義詞' : '關鍵字'}）</div>
-                          <div>依據：{issue.source}</div>
-                          <div>後果等級：{getConsequenceLabel(issue.consequenceLevel)}</div>
-                          <div>可能後果：{issue.penalty || '-'}</div>
-                          <div>
-                            適用：{(issue.appliesCountries || []).map((code: string) => countryNameByCode.get(code) || code).join('/')}
-                            {' '}・方向：{(issue.appliesDirections || []).map((code: string) => directionNameByCode.get(code) || code).join('/')}
-                          </div>
-                          <div>更新：{issue.ruleUpdatedAt || '-'} ・信心值：{typeof issue.ruleConfidence === 'number' ? issue.ruleConfidence.toFixed(2) : '-'}</div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                {sortedRiskIssues.length > 6 && (
-                  <div className="text-xs text-slate-500">尚有 {sortedRiskIssues.length - 6} 筆風險項目。</div>
-                )}
-              </div>
-            )}
-
-            {riskGateTouched && riskReport.summary.blocking > 0 && (
-              <div className="mt-3 text-xs font-bold text-red-600">
-                產品核心：先清除違規風險，再進入最終清單。
-              </div>
-            )}
-          </div>
-          
-          {/* Sorting Options */}
-          <div className="flex items-center gap-3 mb-4 overflow-x-auto pb-1 scrollbar-hide">
-             <span className="text-xs font-bold text-slate-400 whitespace-nowrap">排序方式：</span>
-             <button 
-                onClick={() => setSortBy('default')} 
-                className={`px-3 py-1 text-xs font-bold rounded-md transition ${sortBy === 'default' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-             >
-                預設
-             </button>
-             <button 
-                onClick={() => setSortBy('name')} 
-                className={`px-3 py-1 text-xs font-bold rounded-md transition ${sortBy === 'name' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-             >
-                名稱
-             </button>
-             <button 
-                onClick={() => setSortBy('category')} 
-                className={`px-3 py-1 text-xs font-bold rounded-md transition ${sortBy === 'category' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-             >
-                類別
-             </button>
-             <button 
-                onClick={() => setSortBy('rule')} 
-                className={`px-3 py-1 text-xs font-bold rounded-md transition ${sortBy === 'rule' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-             >
-                行李規則
-             </button>
-             <button 
-                onClick={() => setSortBy('weight')} 
-                className={`px-3 py-1 text-xs font-bold rounded-md transition ${sortBy === 'weight' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-             >
-                重量
-             </button>
-          </div>
-
-          {/* Category Tabs (Pills) */}
-          <div className="flex overflow-x-auto gap-3 pb-2 scrollbar-hide mask-linear-fade">
-             <button
-                onClick={() => setActiveCategory('ALL')}
-                className={`px-5 py-2.5 rounded-full whitespace-nowrap text-sm font-bold transition-all flex items-center gap-2 ${
-                    activeCategory === 'ALL'
-                    ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500/20' 
-                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100'
-                }`}
-             >
-                <i className={`fa-solid fa-layer-group ${activeCategory === 'ALL' ? 'text-blue-600' : 'text-slate-400'}`}></i>
+                <i className={`fa-solid fa-layer-group ${activeCategory === 'ALL' ? 'text-blue-300' : 'text-slate-400'}`}></i>
                 全部
-             </button>
-            {Object.values(ItemCategory).map(cat => {
+              </button>
+              {Object.values(ItemCategory).map(cat => {
                 let icon = '';
-                switch(cat) {
-                    case ItemCategory.CLOTHES: icon = 'fa-shirt'; break;
-                    case ItemCategory.ELECTRONICS: icon = 'fa-plug'; break;
-                    case ItemCategory.TOILETRIES: icon = 'fa-pump-soap'; break;
-                    case ItemCategory.LIFESTYLE: icon = 'fa-umbrella'; break;
-                    default: icon = 'fa-box';
+                switch (cat) {
+                  case ItemCategory.CLOTHES: icon = 'fa-shirt'; break;
+                  case ItemCategory.ELECTRONICS: icon = 'fa-plug'; break;
+                  case ItemCategory.TOILETRIES: icon = 'fa-pump-soap'; break;
+                  case ItemCategory.LIFESTYLE: icon = 'fa-umbrella'; break;
+                  default: icon = 'fa-box';
                 }
-
                 return (
                   <button
                     key={cat}
                     onClick={() => setActiveCategory(cat)}
-                    className={`px-5 py-2.5 rounded-full whitespace-nowrap text-sm font-bold transition-all flex items-center gap-2 ${
-                      activeCategory === cat 
-                        ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500/20' 
+                    className={`px-4 py-2 rounded-full whitespace-nowrap text-xs font-bold transition-all flex items-center gap-1.5 ${activeCategory === cat
+                        ? 'bg-slate-800 text-white shadow-md shadow-slate-200'
                         : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100'
-                    }`}
+                      }`}
                   >
-                    <i className={`fa-solid ${icon} ${activeCategory === cat ? 'text-blue-600' : 'text-slate-400'}`}></i>
+                    <i className={`fa-solid ${icon} ${activeCategory === cat ? 'text-blue-300' : 'text-slate-400'}`}></i>
                     {cat}
                   </button>
                 );
-            })}
-          </div>
-
-          <div className="mt-4 flex flex-col sm:flex-row gap-3">
-            <div className="flex-1 relative">
-              <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-              <input
-                type="text"
-                placeholder="搜尋物品（名稱）..."
-                value={itemSearch}
-                onChange={(e) => setItemSearch(e.target.value)}
-                className="w-full pl-10 pr-10 py-3 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition bg-white"
-              />
-              {itemSearch.trim() && (
-                <button
-                  onClick={() => setItemSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                  aria-label="清除搜尋"
-                >
-                  <i className="fa-solid fa-xmark"></i>
-                </button>
-              )}
+              })}
             </div>
-            <div className="flex gap-2">
+
+            {/* 3. Batch Actions (Compact) */}
+            <div className="flex gap-1 shrink-0 border-l border-slate-200 pl-3">
               <button
                 onClick={() => handleBulkSetChecked(true)}
-                className="bg-white text-slate-700 px-4 py-3 rounded-xl font-bold border border-slate-200 hover:border-blue-300 hover:text-blue-700 transition shadow-sm"
+                className="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-50 text-slate-600 border border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition"
+                title="全選"
               >
-                全選
+                <i className="fa-solid fa-check-double text-xs"></i>
               </button>
               <button
                 onClick={() => handleBulkSetChecked(false)}
-                className="bg-white text-slate-700 px-4 py-3 rounded-xl font-bold border border-slate-200 hover:border-blue-300 hover:text-blue-700 transition shadow-sm"
+                className="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 transition"
+                title="全不選"
               >
-                全不選
+                <i className="fa-solid fa-xmark text-xs"></i>
               </button>
+            </div>
           </div>
         </div>
 
@@ -1368,235 +1367,246 @@ const GeneratorTab: React.FC = () => {
           <button
             onClick={handleFinish}
             disabled={riskReport.summary.blocking > 0}
-            className={`w-full px-5 py-3 rounded-xl font-black text-base transition shadow-lg flex items-center justify-center gap-2 ${
-              riskReport.summary.blocking > 0
+            className={`w-full px-5 py-3 rounded-xl font-black text-base transition shadow-lg flex items-center justify-center gap-2 ${riskReport.summary.blocking > 0
                 ? 'bg-slate-200 text-slate-400 shadow-slate-100 cursor-not-allowed'
                 : 'bg-slate-900 text-white hover:bg-blue-600 shadow-slate-200'
-            }`}
+              }`}
           >
             {riskReport.summary.blocking > 0 ? `先排除高風險 (${riskReport.summary.blocking})` : '完成並歸類'}
             <i className="fa-solid fa-check-circle"></i>
           </button>
         </div>
 
-          <div className="mt-2 text-xs text-slate-500 flex items-center justify-between">
-            <span>顯示 {displayItems.length} 項 • 已選 {filteredSelectedCount} 項</span>
-            {itemSearch.trim() && (
-              <span className="text-slate-400">篩選中</span>
-            )}
-          </div>
-       </div>
+        <div className="mt-2 text-xs text-slate-500 flex items-center justify-between">
+          <span>顯示 {displayItems.length} 項 • 已選 {filteredSelectedCount} 項</span>
+          {itemSearch.trim() && (
+            <span className="text-slate-400">篩選中</span>
+          )}
+        </div>
+      </div>
 
-       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-6">
-          <div className="divide-y divide-slate-50">
-            {displayItems.length > 0 ? (
-                displayItems.map(item => {
-                const ruleConfig = getRuleConfig(item.rule);
-                return (
-                <div key={item.id} className={`flex items-center justify-between p-5 transition-colors ${item.checked ? 'bg-white' : 'bg-slate-50/50'}`}>
-                    <div className="flex items-center gap-4 flex-1 cursor-pointer" onClick={() => handleToggleCheck(item.id)}>
-                        <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${item.checked ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300 text-transparent'}`}>
-                            <i className="fa-solid fa-check text-xs"></i>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-6">
+        <div className="divide-y divide-slate-50">
+          {displayItems.length > 0 ? (
+            {
+              displayItems.length > 0 ? (
+                displayItems.map((item, index) => {
+                  const ruleConfig = getRuleConfig(item.rule);
+                  const prevItem = displayItems[index - 1];
+                  const showGroupHeader = activeCategory === 'ALL' &&
+                    !itemSearch.trim() &&
+                    sortBy === 'default' &&
+                    (!prevItem || prevItem.category !== item.category);
+
+                  return (
+                    <React.Fragment key={item.id}>
+                      {showGroupHeader && (
+                        <div className="sticky top-[138px] z-10 bg-slate-50/95 backdrop-blur px-5 py-2 border-b border-t border-slate-100 text-xs font-black text-slate-500 tracking-wider uppercase first:border-t-0">
+                          {item.category}
                         </div>
-                        <div className={item.checked ? 'opacity-100' : 'opacity-50'}>
-                            <div className="flex items-center gap-2">
-                                <p className="font-bold text-slate-800 text-lg">{item.name}</p>
-                                {item.weight && (
-                                    <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1">
-                                        <i className="fa-solid fa-weight-hanging text-[8px]"></i> {item.weight}kg
-                                    </span>
-                                )}
-                                {activeCategory === 'ALL' && (
-                                    <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                                        {item.category}
-                                    </span>
-                                )}
+                      )}
+                      <div className={`flex items-center justify-between p-4 transition-colors border-b border-slate-50 last:border-0 ${item.checked ? 'bg-white' : 'bg-slate-50/30'}`}>
+                        <div className="flex items-center gap-4 flex-1 cursor-pointer select-none" onClick={() => handleToggleCheck(item.id)}>
+                          <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${item.checked ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 text-transparent bg-white'}`}>
+                            <i className="fa-solid fa-check text-[10px]"></i>
+                          </div>
+                          <div className={item.checked ? 'opacity-100' : 'opacity-60 grayscale'}>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className={`text-base ${item.checked ? 'font-bold text-slate-800' : 'font-medium text-slate-600'}`}>{item.name}</p>
+                              {item.weight && (
+                                <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1">
+                                  <i className="fa-solid fa-weight-hanging text-[8px]"></i> {item.weight}kg
+                                </span>
+                              )}
                             </div>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold flex items-center gap-1.5 w-fit mt-1 border ${ruleConfig.style}`}>
-                                <i className={`fa-solid ${ruleConfig.icon}`}></i>
-                                {ruleConfig.label}
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-1 w-fit mt-1 border ${ruleConfig.style} ${item.checked ? '' : 'opacity-70'}`}>
+                              <i className={`fa-solid ${ruleConfig.icon}`}></i>
+                              {ruleConfig.label}
                             </span>
+                          </div>
                         </div>
-                    </div>
-                    
-                    {item.checked && (
-                        <div className="flex items-center gap-3 bg-slate-50 rounded-lg p-1 border border-slate-100">
-                            <button 
-                                onClick={() => handleUpdateQuantity(item.id, -1)}
-                                className="w-8 h-8 flex items-center justify-center rounded-md bg-white text-slate-600 shadow-sm hover:text-blue-600 active:scale-95 transition"
-                            >
-                                <i className="fa-solid fa-minus text-xs"></i>
-                            </button>
-                            <span className="w-6 text-center font-bold text-slate-700">{item.quantity}</span>
-                            <button 
-                                onClick={() => handleUpdateQuantity(item.id, 1)}
-                                className="w-8 h-8 flex items-center justify-center rounded-md bg-white text-slate-600 shadow-sm hover:text-blue-600 active:scale-95 transition"
-                            >
-                                <i className="fa-solid fa-plus text-xs"></i>
-                            </button>
-                        </div>
-                    )}
-                </div>
-            )})
-           ) : (
-               <div className="p-8 text-center text-slate-400">
-                   此分類無物品
-               </div>
-           )}
-          </div>
-          
-          {/* Add Custom Item & Rule Selection */}
-          <div className="p-6 bg-slate-50/80 border-t border-slate-100">
-            <div className="flex flex-col sm:flex-row gap-3">
-                <div className="flex-1 relative">
-                     <i className="fa-solid fa-plus absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                     <input 
-                        type="text" 
-                        placeholder={activeCategory === 'ALL' ? '新增物品 (歸類為雜項)...' : `新增物品到「${activeCategory}」...`}
-                        value={customItemName}
-                        onChange={(e) => setCustomItemName(e.target.value)}
-                        className="w-full pl-10 p-3 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddCustomItem()}
-                     />
-                </div>
-                <div className="flex gap-2">
-                    <div className="relative w-20 sm:w-24 flex-shrink-0">
-                         <input 
-                            type="number" 
-                            placeholder="0.0"
-                            value={customItemWeight}
-                            onChange={(e) => setCustomItemWeight(e.target.value)}
-                            className="w-full p-3 pr-6 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500 text-center"
-                            min="0"
-                            step="0.1"
-                         />
-                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">kg</span>
-                    </div>
 
-                    <select 
-                        value={customItemRule as string}
-                        onChange={(e) => setCustomItemRule(e.target.value as RuleType)}
-                        className="p-3 border border-slate-200 rounded-xl text-sm bg-white text-slate-700 outline-none focus:border-blue-500 max-w-[150px]"
-                    >
-                        <optgroup label="標準規則">
-                            <option value={LuggageRule.FLEXIBLE_CHECKED}>習慣託運</option>
-                            <option value={LuggageRule.FLEXIBLE_CARRY_ON}>習慣手提</option>
-                            <option value={LuggageRule.STRICT_CARRY_ON}>強制手提</option>
-                            <option value={LuggageRule.STRICT_CHECKED}>強制託運</option>
-                        </optgroup>
-                        {customRuleDefs.length > 0 && (
-                            <optgroup label="自訂規則">
-                                {customRuleDefs.map(rule => (
-                                    <option key={rule.id} value={rule.id}>{rule.name}</option>
-                                ))}
-                            </optgroup>
+                        {item.checked && (
+                          <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-200 shadow-sm ml-2">
+                            <button
+                              onClick={() => handleUpdateQuantity(item.id, -1)}
+                              className="w-7 h-7 flex items-center justify-center rounded bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition"
+                            >
+                              <i className="fa-solid fa-minus text-[10px]"></i>
+                            </button>
+                            <span className="w-6 text-center font-bold text-sm text-slate-700">{item.quantity}</span>
+                            <button
+                              onClick={() => handleUpdateQuantity(item.id, 1)}
+                              className="w-7 h-7 flex items-center justify-center rounded bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition"
+                            >
+                              <i className="fa-solid fa-plus text-[10px]"></i>
+                            </button>
+                          </div>
                         )}
-                    </select>
-                    <button 
-                        onClick={handleAddCustomItem}
-                        className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md whitespace-nowrap"
-                    >
-                        新增
-                    </button>
+                      </div>
+                    </React.Fragment>
+                  )
+                })
+              ) : (
+                <div className="p-8 text-center text-slate-400">
+                  此分類無物品
                 </div>
+              )
+            }
+          </div>
+
+        {/* Add Custom Item & Rule Selection */}
+        <div className="p-6 bg-slate-50/80 border-t border-slate-100">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1 relative">
+              <i className="fa-solid fa-plus absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+              <input
+                type="text"
+                placeholder={activeCategory === 'ALL' ? '新增物品 (歸類為雜項)...' : `新增物品到「${activeCategory}」...`}
+                value={customItemName}
+                onChange={(e) => setCustomItemName(e.target.value)}
+                className="w-full pl-10 p-3 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+                onKeyDown={(e) => e.key === 'Enter' && handleAddCustomItem()}
+              />
+            </div>
+            <div className="flex gap-2">
+              <div className="relative w-20 sm:w-24 flex-shrink-0">
+                <input
+                  type="number"
+                  placeholder="0.0"
+                  value={customItemWeight}
+                  onChange={(e) => setCustomItemWeight(e.target.value)}
+                  className="w-full p-3 pr-6 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500 text-center"
+                  min="0"
+                  step="0.1"
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">kg</span>
+              </div>
+
+              <select
+                value={customItemRule as string}
+                onChange={(e) => setCustomItemRule(e.target.value as RuleType)}
+                className="p-3 border border-slate-200 rounded-xl text-sm bg-white text-slate-700 outline-none focus:border-blue-500 max-w-[150px]"
+              >
+                <optgroup label="標準規則">
+                  <option value={LuggageRule.FLEXIBLE_CHECKED}>習慣託運</option>
+                  <option value={LuggageRule.FLEXIBLE_CARRY_ON}>習慣手提</option>
+                  <option value={LuggageRule.STRICT_CARRY_ON}>強制手提</option>
+                  <option value={LuggageRule.STRICT_CHECKED}>強制託運</option>
+                </optgroup>
+                {customRuleDefs.length > 0 && (
+                  <optgroup label="自訂規則">
+                    {customRuleDefs.map(rule => (
+                      <option key={rule.id} value={rule.id}>{rule.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+              <button
+                onClick={handleAddCustomItem}
+                className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md whitespace-nowrap"
+              >
+                新增
+              </button>
             </div>
           </div>
-       </div>
+        </div>
+      </div>
 
-       {/* Custom Rule Manager Section */}
-       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-           <button 
-                onClick={() => setShowRuleManager(!showRuleManager)}
-                className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition"
-           >
-               <div className="flex items-center gap-2 text-slate-800 font-bold">
-                   <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center">
-                       <i className="fa-solid fa-gear"></i>
-                   </div>
-                   管理自訂行李規則 (Advanced)
-               </div>
-               <i className={`fa-solid fa-chevron-down text-slate-400 transition-transform ${showRuleManager ? 'rotate-180' : ''}`}></i>
-           </button>
+      {/* Custom Rule Manager Section */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <button
+          onClick={() => setShowRuleManager(!showRuleManager)}
+          className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition"
+        >
+          <div className="flex items-center gap-2 text-slate-800 font-bold">
+            <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center">
+              <i className="fa-solid fa-gear"></i>
+            </div>
+            管理自訂行李規則 (Advanced)
+          </div>
+          <i className={`fa-solid fa-chevron-down text-slate-400 transition-transform ${showRuleManager ? 'rotate-180' : ''}`}></i>
+        </button>
 
-           {showRuleManager && (
-               <div className="p-6 border-t border-slate-100 bg-slate-50/50">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                        {/* New Rule Form */}
-                        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                            <h4 className="font-bold text-slate-700 mb-4 text-sm">新增規則定義</h4>
-                            <div className="space-y-3">
-                                <input 
-                                    type="text" 
-                                    placeholder="規則名稱 (例如：易碎物品)"
-                                    className="w-full p-2 border border-slate-200 rounded-lg text-sm"
-                                    value={newRuleName}
-                                    onChange={(e) => setNewRuleName(e.target.value)}
-                                />
-                                <div className="flex gap-2">
-                                    <select 
-                                        className="p-2 border border-slate-200 rounded-lg text-sm bg-white flex-1"
-                                        value={newRuleBehavior}
-                                        onChange={(e) => setNewRuleBehavior(e.target.value as 'CARRY' | 'CHECK')}
-                                    >
-                                        <option value="CARRY">視為手提</option>
-                                        <option value="CHECK">視為託運</option>
-                                    </select>
-                                    <select 
-                                        className="p-2 border border-slate-200 rounded-lg text-sm bg-white w-20 font-awesome"
-                                        value={newRuleIcon}
-                                        onChange={(e) => setNewRuleIcon(e.target.value)}
-                                    >
-                                        {availableIcons.map(i => (
-                                            <option key={i.class} value={i.class}>{i.unicode} {i.label}</option> 
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="flex gap-2 flex-wrap">
-                                    {availableColors.map((col, idx) => (
-                                        <button 
-                                            key={idx}
-                                            onClick={() => setNewRuleColor(col.class)}
-                                            className={`w-6 h-6 rounded-full border ${col.class.split(' ')[0]} ${newRuleColor === col.class ? 'ring-2 ring-offset-1 ring-slate-400' : ''}`}
-                                            title={col.label}
-                                        ></button>
-                                    ))}
-                                </div>
-                                <button 
-                                    onClick={handleAddCustomRule}
-                                    className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 mt-2"
-                                >
-                                    建立規則
-                                </button>
-                            </div>
-                        </div>
+        {showRuleManager && (
+          <div className="p-6 border-t border-slate-100 bg-slate-50/50">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* New Rule Form */}
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                <h4 className="font-bold text-slate-700 mb-4 text-sm">新增規則定義</h4>
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="規則名稱 (例如：易碎物品)"
+                    className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+                    value={newRuleName}
+                    onChange={(e) => setNewRuleName(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <select
+                      className="p-2 border border-slate-200 rounded-lg text-sm bg-white flex-1"
+                      value={newRuleBehavior}
+                      onChange={(e) => setNewRuleBehavior(e.target.value as 'CARRY' | 'CHECK')}
+                    >
+                      <option value="CARRY">視為手提</option>
+                      <option value="CHECK">視為託運</option>
+                    </select>
+                    <select
+                      className="p-2 border border-slate-200 rounded-lg text-sm bg-white w-20 font-awesome"
+                      value={newRuleIcon}
+                      onChange={(e) => setNewRuleIcon(e.target.value)}
+                    >
+                      {availableIcons.map(i => (
+                        <option key={i.class} value={i.class}>{i.unicode} {i.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    {availableColors.map((col, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setNewRuleColor(col.class)}
+                        className={`w-6 h-6 rounded-full border ${col.class.split(' ')[0]} ${newRuleColor === col.class ? 'ring-2 ring-offset-1 ring-slate-400' : ''}`}
+                        title={col.label}
+                      ></button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleAddCustomRule}
+                    className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 mt-2"
+                  >
+                    建立規則
+                  </button>
+                </div>
+              </div>
 
-                        {/* Existing Custom Rules */}
-                        <div>
-                            <h4 className="font-bold text-slate-700 mb-4 text-sm">已建立的規則</h4>
-                            {customRuleDefs.length === 0 ? (
-                                <p className="text-slate-400 text-sm italic">尚無自訂規則</p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {customRuleDefs.map(rule => (
-                                        <div key={rule.id} className={`flex items-center gap-3 p-3 rounded-lg border text-sm ${rule.styleClass}`}>
-                                            <i className={`fa-solid ${rule.icon}`}></i>
-                                            <span className="font-bold flex-1">{rule.name}</span>
-                                            <span className="text-[10px] uppercase bg-white/50 px-2 py-1 rounded">
-                                                {rule.behavior === 'CARRY' ? '手提' : '託運'}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    <div className="text-xs text-slate-400">
-                        <i className="fa-solid fa-circle-info mr-1"></i>
-                        新增後，您可以在上方「新增物品」時選擇此規則。
-                    </div>
-               </div>
-           )}
-       </div>
+              {/* Existing Custom Rules */}
+              <div>
+                <h4 className="font-bold text-slate-700 mb-4 text-sm">已建立的規則</h4>
+                {customRuleDefs.length === 0 ? (
+                  <p className="text-slate-400 text-sm italic">尚無自訂規則</p>
+                ) : (
+                  <div className="space-y-2">
+                    {customRuleDefs.map(rule => (
+                      <div key={rule.id} className={`flex items-center gap-3 p-3 rounded-lg border text-sm ${rule.styleClass}`}>
+                        <i className={`fa-solid ${rule.icon}`}></i>
+                        <span className="font-bold flex-1">{rule.name}</span>
+                        <span className="text-[10px] uppercase bg-white/50 px-2 py-1 rounded">
+                          {rule.behavior === 'CARRY' ? '手提' : '託運'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="text-xs text-slate-400">
+              <i className="fa-solid fa-circle-info mr-1"></i>
+              新增後，您可以在上方「新增物品」時選擇此規則。
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
