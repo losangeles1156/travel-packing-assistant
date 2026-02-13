@@ -362,6 +362,6 @@ api.post('/admin/cleanup', requireAdmin, async (_req, res) => {
   res.json({ ok: true, result: data });
 });
 
-app.use('/api', api);
+app.use('/', api);
 
 export default app;
