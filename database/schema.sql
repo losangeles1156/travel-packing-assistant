@@ -40,6 +40,21 @@ create table if not exists shared_lists (
 );
 create index if not exists idx_shared_lists_created_at on shared_lists(created_at);
 
+-- Table: collab_sessions
+create table if not exists collab_sessions (
+    id uuid primary key default uuid_generate_v4(),
+    snapshot jsonb not null,
+    version int not null default 1,
+    last_active timestamptz not null default now()
+);
+
+-- RLS for collab_sessions
+alter table collab_sessions enable row level security;
+
+create policy "Enable select for everyone" on collab_sessions for select using (true);
+create policy "Enable insert for everyone" on collab_sessions for insert with check (true);
+create policy "Enable update for everyone" on collab_sessions for update using (true);
+
 -- RPC: Upsert User
 create or replace function upsert_user(
     p_user_id text,

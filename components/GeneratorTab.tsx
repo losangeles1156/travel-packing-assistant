@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { PackingItem, TripDetails, LuggageRule, ItemCategory, CustomRuleDef, RuleType, PreFlightTask } from '../types';
 import { DEFAULT_DATABASE, PRE_FLIGHT_TASKS, TRIP_TEMPLATES } from '../constants';
 import { RISK_RULESET_META, SUPPORTED_COUNTRIES, SUPPORTED_DIRECTIONS } from '../constants/riskKeywordRules.js';
@@ -23,6 +23,7 @@ import {
   setActiveListId as persistActiveListId,
   touchTripDetailsKey,
 } from '../services/listStorageService';
+import { useCollabSession } from '../hooks/useCollabSession';
 
 const GeneratorTab: React.FC = () => {
   const [step, setStep] = useState<number>(0); // 0: Input, 1: Customize, 2: Result
@@ -434,8 +435,44 @@ const GeneratorTab: React.FC = () => {
     packedItemIds,
     sortBy,
     step,
+    step,
     tasks,
   ]);
+
+  const currentSnapshotForCollab = useMemo(() => {
+    if (!activeListId) return null;
+    return buildSnapshot(activeListId, new Date().toISOString());
+  }, [
+    activeListId,
+    activeCategory,
+    customRuleDefs,
+    dates.end,
+    dates.start,
+    destination,
+    tripCountry,
+    tripDirection,
+    duration,
+    items,
+    packedItemIds,
+    sortBy,
+    step,
+    tasks,
+    buildSnapshot // Added as dependency if it relies on scope, but it's defined in component scope
+  ]);
+
+
+
+  const applySnapshotRef = useRef(applySnapshot);
+  useEffect(() => { applySnapshotRef.current = applySnapshot; });
+
+  const onRemoteUpdateStable = useCallback((s: ListSnapshot) => {
+    applySnapshotRef.current(s);
+  }, []);
+
+  const { sessionId: collabSessionId, startCollab, isSyncing } = useCollabSession(
+    currentSnapshotForCollab,
+    onRemoteUpdateStable
+  );
 
   const handleUpdateQuantity = (id: string, delta: number) => {
     setItems(prev => prev.map(item => {
@@ -989,6 +1026,9 @@ const GeneratorTab: React.FC = () => {
         setTasks={setTasks} // Pass setter
         packedItemIds={packedItemIds} // Pass lifted state
         setPackedItemIds={setPackedItemIds} // Pass setter
+        collabSessionId={collabSessionId}
+        onStartCollab={startCollab}
+        isSyncing={isSyncing}
       />
     );
   }
@@ -1024,6 +1064,23 @@ const GeneratorTab: React.FC = () => {
             >
               {riskReport.summary.blocking > 0 ? `先排除高風險 (${riskReport.summary.blocking})` : '完成並歸類'} <i className="fa-solid fa-check-circle"></i>
             </button>
+            {!collabSessionId ? (
+              <button
+                onClick={startCollab}
+                className="hidden md:flex bg-white text-indigo-600 border border-indigo-100 hover:bg-indigo-50 px-4 py-3 rounded-xl font-bold transition shadow-sm items-center justify-center gap-2"
+                title="開啟即時協作"
+              >
+                <i className="fa-solid fa-users"></i>
+              </button>
+            ) : (
+              <div className="hidden md:flex bg-green-50 text-green-700 border border-green-200 px-4 py-3 rounded-xl font-bold transition shadow-sm items-center justify-center gap-2">
+                <div className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                </div>
+                <span className="text-xs">協作中</span>
+              </div>
+            )}
           </div>
         </div>
         <div className="mb-5 rounded-2xl border border-rose-300 bg-gradient-to-r from-rose-50 via-red-50 to-orange-50 px-4 py-3 shadow-sm">
