@@ -87,7 +87,7 @@ export const buildAdminHeaders = (token: string) => {
 };
 
 export const fetchAdminMetrics = async (days: number, headers: Record<string, string>) => {
-  const res = await fetch(apiUrl(`/api/admin/metrics?days=${encodeURIComponent(String(days))}`), { headers });
+  const res = await fetch(apiUrl(`/admin/metrics?days=${encodeURIComponent(String(days))}`), { headers });
   if (!res.ok) throw new AdminApiError(`載入失敗（${res.status}）`, res.status);
   const data = (await res.json()) as MetricsResponse;
   if (!data?.ok) throw new AdminApiError('載入失敗');
@@ -102,7 +102,7 @@ export const fetchRecentEvents = async (
   search.set('limit', String(params.limit));
   if (params.name) search.set('name', params.name);
   if (params.q) search.set('q', params.q);
-  const res = await fetch(apiUrl(`/api/admin/recent-events?${search.toString()}`), { headers });
+  const res = await fetch(apiUrl(`/admin/recent-events?${search.toString()}`), { headers });
   if (!res.ok) throw new AdminApiError(`載入失敗（${res.status}）`, res.status);
   const data = (await res.json()) as RecentEventsResponse;
   if (!data?.ok) throw new AdminApiError('載入失敗');
@@ -110,7 +110,7 @@ export const fetchRecentEvents = async (
 };
 
 export const runAdminCleanup = async (days: number, headers: Record<string, string>) => {
-  const res = await fetch(apiUrl('/api/admin/cleanup'), {
+  const res = await fetch(apiUrl('/admin/cleanup'), {
     method: 'POST',
     headers: { ...headers, 'content-type': 'application/json' },
     body: JSON.stringify({ days }),

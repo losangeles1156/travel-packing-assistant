@@ -312,3 +312,53 @@ create policy "Enable update for everyone" on sessions for update using (true);
 create policy "Public read shared lists" on shared_lists for select using (true);
 create policy "Public insert shared lists" on shared_lists for insert with check (true);
 
+-- RPC: Get Risk KPI Stats
+create or replace function get_risk_kpi(p_days int)
+returns jsonb as $$
+declare
+    v_blocked_events bigint;
+    v_cleared_events bigint;
+    v_blocked_sessions bigint;
+    v_cleared_sessions bigint;
+    v_resolved_by_action jsonb;
+    v_resolved_by_type jsonb;
+    v_threshold timestamptz;
+begin
+    v_threshold := now() - (p_days || ' days')::interval;
+
+    -- Basic counts
+    select count(*) into v_blocked_events from events where name = 'risk_gate_blocked' and created_at >= v_threshold;
+    select count(*) into v_cleared_events from events where name = 'risk_blocking_cleared' and created_at >= v_threshold;
+
+    -- Session counts
+    select count(distinct session_id) into v_blocked_sessions from events where name = 'risk_gate_blocked' and created_at >= v_threshold;
+    select count(distinct session_id) into v_cleared_sessions from events where name = 'risk_blocking_cleared' and created_at >= v_threshold;
+
+    -- Aggregate resolution actions
+    select jsonb_object_agg(sub.action, sub.count) into v_resolved_by_action from (
+        select (payload->>'action')::text as action, count(*) as count
+        from events
+        where name = 'risk_issue_resolved' and created_at >= v_threshold
+        group by 1
+    ) sub;
+
+    -- Aggregate resolution types
+    select jsonb_object_agg(sub.issueType, sub.count) into v_resolved_by_type from (
+        select (payload->>'issueType')::text as issueType, count(*) as count
+        from events
+        where name = 'risk_issue_resolved' and created_at >= v_threshold
+        group by 1
+    ) sub;
+
+    return jsonb_build_object(
+        'blockedEvents', v_blocked_events,
+        'clearedEvents', v_cleared_events,
+        'blockedSessions', v_blocked_sessions,
+        'clearedSessions', v_cleared_sessions,
+        'clearanceRate', case when v_blocked_sessions = 0 then 0 else round(v_cleared_sessions::numeric / v_blocked_sessions::numeric, 4) end,
+        'resolvedByAction', coalesce(v_resolved_by_action, '{}'::jsonb),
+        'resolvedByType', coalesce(v_resolved_by_type, '{}'::jsonb)
+    );
+end;
+$$ language plpgsql;
+

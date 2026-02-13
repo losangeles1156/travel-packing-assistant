@@ -10,6 +10,8 @@ import { buildCustomRuleById, getGeneratorRuleConfig } from '../utils/packingRul
 import { apiUrl } from '../services/apiBase';
 import { analyzePackingRisks } from '../utils/riskEngine.js';
 import { applyRiskResolution } from '../utils/riskActions.js';
+import { compareRiskIssues, getConsequenceLabel } from '../utils/riskPriority.js';
+import { getRiskBannerCopy, resolveRiskCopyVariant } from '../utils/riskBannerCopy.js';
 import {
   createEmptyListSnapshot,
   getActiveListId,
@@ -111,6 +113,7 @@ const GeneratorTab: React.FC = () => {
   const [newRuleBehavior, setNewRuleBehavior] = useState<'CARRY' | 'CHECK'>('CARRY');
   const [newRuleColor, setNewRuleColor] = useState('bg-purple-50 text-purple-600 border-purple-200');
   const [riskGateTouched, setRiskGateTouched] = useState(false);
+  const [riskCopyVariant, setRiskCopyVariant] = useState<'serious' | 'friendly'>('serious');
   const [expandedRiskKey, setExpandedRiskKey] = useState<string | null>(null);
   const [lastBulkResolveSnapshot, setLastBulkResolveSnapshot] = useState<PackingItem[] | null>(null);
   const [lastBulkResolveCount, setLastBulkResolveCount] = useState(0);
@@ -313,7 +316,7 @@ const GeneratorTab: React.FC = () => {
     const snapshot = buildSnapshot(activeListId, updatedAt);
 
     try {
-      const res = await fetch(apiUrl('/api/share'), {
+      const res = await fetch(apiUrl('/share'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ snapshot }),
@@ -338,7 +341,7 @@ const GeneratorTab: React.FC = () => {
       const shareId = params.get('share');
       if (shareId) {
         try {
-          const res = await fetch(apiUrl(`/api/share/${encodeURIComponent(shareId)}`));
+          const res = await fetch(apiUrl(`/share/${encodeURIComponent(shareId)}`));
           if (!res.ok) throw new Error('not ok');
           const data = await res.json();
           const snapshot = data?.snapshot as ListSnapshot | undefined;
@@ -574,10 +577,12 @@ const GeneratorTab: React.FC = () => {
     () => new Map(SUPPORTED_DIRECTIONS.map(d => [d.code, d.name])),
     []
   );
-  const sortedRiskIssues = useMemo(() => {
-    const rank: Record<string, number> = { Critical: 3, High: 2, Medium: 1 };
-    return [...riskReport.issues].sort((a, b) => (rank[b.severity] || 0) - (rank[a.severity] || 0));
-  }, [riskReport.issues]);
+  const sortedRiskIssues = useMemo(() => [...riskReport.issues].sort(compareRiskIssues), [riskReport.issues]);
+  const riskBannerCopy = useMemo(() => getRiskBannerCopy(riskCopyVariant), [riskCopyVariant]);
+  const topBlockingIssue = useMemo(
+    () => sortedRiskIssues.find((issue) => issue.blocking) || null,
+    [sortedRiskIssues]
+  );
 
   useEffect(() => {
     const prev = lastBlockingCountRef.current;
@@ -609,7 +614,8 @@ const GeneratorTab: React.FC = () => {
         critical: riskReport.summary.critical,
         high: riskReport.summary.high,
       });
-      alert(`仍有 ${riskReport.summary.blocking} 個高風險項目未處理，請先修正後再完成。`);
+      const consequence = topBlockingIssue?.penalty ? `\n${topBlockingIssue.penalty}` : '';
+      alert(`仍有 ${riskReport.summary.blocking} 個高風險項目未處理，請先修正後再完成。${consequence}`);
       return;
     }
 
@@ -680,6 +686,24 @@ const GeneratorTab: React.FC = () => {
     lastStepTrackedRef.current = step;
     trackEvent('generator_step_viewed', { step });
   }, [step]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const queryValue = params.get('riskCopy');
+    const stored = window.localStorage.getItem('tpa_risk_copy_variant');
+    const resolved = resolveRiskCopyVariant({ queryValue, storedValue: stored });
+    setRiskCopyVariant(resolved as 'serious' | 'friendly');
+    window.localStorage.setItem('tpa_risk_copy_variant', resolved);
+  }, []);
+
+  const handleRiskCopyVariantChange = (variant: 'serious' | 'friendly') => {
+    setRiskCopyVariant(variant);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('tpa_risk_copy_variant', variant);
+    }
+    trackEvent('risk_copy_variant_changed', { variant });
+  };
 
   useEffect(() => {
     if (!hydrateDoneRef.current) return;
@@ -1002,10 +1026,57 @@ const GeneratorTab: React.FC = () => {
                   {riskReport.summary.blocking > 0 ? `先排除高風險 (${riskReport.summary.blocking})` : '完成並歸類'} <i className="fa-solid fa-check-circle"></i>
               </button>
             </div>
+	          </div>
+          <div className="mb-5 rounded-2xl border border-rose-300 bg-gradient-to-r from-rose-50 via-red-50 to-orange-50 px-4 py-3 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-black text-rose-800">
+                  <i className="fa-solid fa-gavel mr-2" />
+                  {riskBannerCopy.title}
+                </div>
+                <div className="mt-1 text-xs font-bold text-rose-700">
+                  {riskBannerCopy.description}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {riskBannerCopy.badges.map((badge: string, idx: number) => (
+                  <span
+                    key={`${badge}-${idx}`}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-black ${
+                      idx === 0 ? 'bg-rose-700 text-white' : 'bg-red-700 text-white'
+                    }`}
+                  >
+                    {badge}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => handleRiskCopyVariantChange('serious')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black border transition ${
+                  riskCopyVariant === 'serious'
+                    ? 'border-rose-700 bg-rose-700 text-white'
+                    : 'border-rose-300 bg-white text-rose-700 hover:bg-rose-100'
+                }`}
+              >
+                法規嚴肅版
+              </button>
+              <button
+                onClick={() => handleRiskCopyVariantChange('friendly')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black border transition ${
+                  riskCopyVariant === 'friendly'
+                    ? 'border-rose-700 bg-rose-700 text-white'
+                    : 'border-rose-300 bg-white text-rose-700 hover:bg-rose-100'
+                }`}
+              >
+                旅客易懂版
+              </button>
+            </div>
           </div>
 
-          <div
-            className={`mb-5 rounded-2xl border p-4 ${
+	          <div
+	            className={`mb-5 rounded-2xl border p-4 ${
               riskReport.summary.blocking > 0
                 ? 'border-red-300 bg-red-50'
                 : riskReport.summary.total > 0
@@ -1050,6 +1121,12 @@ const GeneratorTab: React.FC = () => {
                 為什麼這很重要：高風險項目可能在安檢被沒收、延誤登機，嚴重時會有罰款或法律責任。
               </div>
             )}
+            {riskReport.summary.blocking > 0 && topBlockingIssue?.penalty && (
+              <div className="mt-2 rounded-xl border border-red-300 bg-red-50 px-3 py-2.5 text-xs font-black text-red-800">
+                <i className="fa-solid fa-triangle-exclamation mr-1.5" />
+                最高風險可能後果：{topBlockingIssue.penalty.replace(/^可能後果：/, '')}
+              </div>
+            )}
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {riskReport.summary.blocking > 0 && (
@@ -1082,6 +1159,22 @@ const GeneratorTab: React.FC = () => {
                   const issueKey = `${issue.itemId}-${issue.type}`;
                   const isExpanded = expandedRiskKey === issueKey;
                   const defaultAction = getDefaultRiskAction(issue);
+                  const consequenceClass =
+                    issue.consequenceLevel === 'LEGAL'
+                      ? 'bg-rose-700 text-white'
+                      : issue.consequenceLevel === 'FINE'
+                        ? 'bg-red-700 text-white'
+                        : issue.consequenceLevel === 'CONFISCATION'
+                          ? 'bg-orange-200 text-orange-900'
+                          : 'bg-amber-200 text-amber-900';
+                  const cardClass =
+                    issue.consequenceLevel === 'LEGAL'
+                      ? 'border-rose-300 bg-rose-50/95 shadow-md shadow-rose-100'
+                      : issue.consequenceLevel === 'FINE'
+                        ? 'border-red-300 bg-red-50/95 shadow-md shadow-red-100'
+                        : issue.consequenceLevel === 'CONFISCATION'
+                          ? 'border-orange-300 bg-orange-50/90'
+                          : 'border-amber-200 bg-amber-50/85';
                   const severityClass =
                     issue.severity === 'Critical'
                       ? 'bg-red-100 text-red-700'
@@ -1090,10 +1183,13 @@ const GeneratorTab: React.FC = () => {
                         : 'bg-amber-100 text-amber-700';
 
                   return (
-                    <div key={issueKey} className="rounded-xl border border-white/70 bg-white/80 px-3 py-2.5">
+                    <div key={issueKey} className={`rounded-xl border px-3 py-2.5 ${cardClass}`}>
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`px-2 py-0.5 rounded-full text-[11px] font-black ${consequenceClass}`}>
+                              {getConsequenceLabel(issue.consequenceLevel)}
+                            </span>
                             <span className={`px-2 py-0.5 rounded-full text-[11px] font-black ${severityClass}`}>
                               {issue.severity}
                             </span>
@@ -1101,6 +1197,11 @@ const GeneratorTab: React.FC = () => {
                           </div>
                           <div className="mt-1 text-xs text-slate-600">{issue.reason}</div>
                           <div className="mt-1 text-[11px] font-bold text-slate-700">建議：{issue.action}</div>
+                          {issue.penalty && (
+                            <div className="mt-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-black text-red-700">
+                              可能後果：{issue.penalty.replace(/^可能後果：/, '')}
+                            </div>
+                          )}
                         </div>
                         <div className="flex gap-2 shrink-0">
                           <button
@@ -1124,12 +1225,16 @@ const GeneratorTab: React.FC = () => {
 
                       {isExpanded && (
                         <div className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-500 space-y-1">
+                          <div>規則 ID：{issue.ruleId}</div>
+                          <div>命中詞：{issue.matchedKeyword || '-'}（{issue.matchedFrom === 'synonym' ? '同義詞' : '關鍵字'}）</div>
                           <div>依據：{issue.source}</div>
+                          <div>後果等級：{getConsequenceLabel(issue.consequenceLevel)}</div>
+                          <div>可能後果：{issue.penalty || '-'}</div>
                           <div>
                             適用：{(issue.appliesCountries || []).map((code: string) => countryNameByCode.get(code) || code).join('/')}
                             {' '}・方向：{(issue.appliesDirections || []).map((code: string) => directionNameByCode.get(code) || code).join('/')}
                           </div>
-                          <div>更新：{issue.ruleUpdatedAt || '-'}</div>
+                          <div>更新：{issue.ruleUpdatedAt || '-'} ・信心值：{typeof issue.ruleConfidence === 'number' ? issue.ruleConfidence.toFixed(2) : '-'}</div>
                         </div>
                       )}
                     </div>

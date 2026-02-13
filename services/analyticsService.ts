@@ -52,10 +52,10 @@ export const trackEvent = async (name: string, payload: Record<string, unknown> 
   try {
     if ('sendBeacon' in navigator) {
       const blob = new Blob([JSON.stringify(body)], { type: 'application/json' });
-      navigator.sendBeacon(apiUrl('/api/events'), blob);
+      navigator.sendBeacon(apiUrl('/events'), blob);
       return;
     }
-    await fetch(apiUrl('/api/events'), {
+    await fetch(apiUrl('/events'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

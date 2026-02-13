@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 const PORT = process.env.PLAYWRIGHT_PORT || '4173';
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${PORT}`;
+const SKIP_WEBSERVER = process.env.PLAYWRIGHT_SKIP_WEBSERVER === '1';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -18,12 +19,14 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
-  webServer: {
-    command: `npm run dev -- --host 127.0.0.1 --port ${PORT}`,
-    url: BASE_URL,
-    reuseExistingServer: true,
-    timeout: 120_000,
-  },
+  webServer: SKIP_WEBSERVER
+    ? undefined
+    : {
+        command: `npm run dev -- --host 127.0.0.1 --port ${PORT}`,
+        url: BASE_URL,
+        reuseExistingServer: true,
+        timeout: 120_000,
+      },
   projects: [
     {
       name: 'mobile-chromium',
