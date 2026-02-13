@@ -1018,8 +1018,8 @@ const GeneratorTab: React.FC = () => {
               onClick={handleFinish}
               disabled={riskReport.summary.blocking > 0}
               className={`hidden md:flex px-6 py-3 rounded-xl font-bold transition shadow-lg items-center justify-center gap-2 ${riskReport.summary.blocking > 0
-                  ? 'bg-slate-200 text-slate-400 shadow-slate-100 cursor-not-allowed'
-                  : 'bg-slate-900 text-white hover:bg-blue-600 shadow-slate-200'
+                ? 'bg-slate-200 text-slate-400 shadow-slate-100 cursor-not-allowed'
+                : 'bg-slate-900 text-white hover:bg-blue-600 shadow-slate-200'
                 }`}
             >
               {riskReport.summary.blocking > 0 ? `先排除高風險 (${riskReport.summary.blocking})` : '完成並歸類'} <i className="fa-solid fa-check-circle"></i>
@@ -1053,8 +1053,8 @@ const GeneratorTab: React.FC = () => {
             <button
               onClick={() => handleRiskCopyVariantChange('serious')}
               className={`px-3 py-1.5 rounded-lg text-xs font-black border transition ${riskCopyVariant === 'serious'
-                  ? 'border-rose-700 bg-rose-700 text-white'
-                  : 'border-rose-300 bg-white text-rose-700 hover:bg-rose-100'
+                ? 'border-rose-700 bg-rose-700 text-white'
+                : 'border-rose-300 bg-white text-rose-700 hover:bg-rose-100'
                 }`}
             >
               法規嚴肅版
@@ -1062,8 +1062,8 @@ const GeneratorTab: React.FC = () => {
             <button
               onClick={() => handleRiskCopyVariantChange('friendly')}
               className={`px-3 py-1.5 rounded-lg text-xs font-black border transition ${riskCopyVariant === 'friendly'
-                  ? 'border-rose-700 bg-rose-700 text-white'
-                  : 'border-rose-300 bg-white text-rose-700 hover:bg-rose-100'
+                ? 'border-rose-700 bg-rose-700 text-white'
+                : 'border-rose-300 bg-white text-rose-700 hover:bg-rose-100'
                 }`}
             >
               旅客易懂版
@@ -1073,10 +1073,10 @@ const GeneratorTab: React.FC = () => {
 
         <div
           className={`mb-5 rounded-2xl border p-4 ${riskReport.summary.blocking > 0
-              ? 'border-red-300 bg-red-50'
-              : riskReport.summary.total > 0
-                ? 'border-amber-300 bg-amber-50'
-                : 'border-emerald-300 bg-emerald-50'
+            ? 'border-red-300 bg-red-50'
+            : riskReport.summary.total > 0
+              ? 'border-amber-300 bg-amber-50'
+              : 'border-emerald-300 bg-emerald-50'
             }`}
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1103,8 +1103,8 @@ const GeneratorTab: React.FC = () => {
           </div>
 
           <div className={`mt-3 rounded-xl border px-3 py-2 text-sm font-bold ${riskReport.summary.blocking > 0
-              ? 'border-red-200 bg-red-100/60 text-red-700'
-              : 'border-emerald-200 bg-emerald-100/70 text-emerald-700'
+            ? 'border-red-200 bg-red-100/60 text-red-700'
+            : 'border-emerald-200 bg-emerald-100/70 text-emerald-700'
             }`}>
             {riskReport.summary.blocking > 0
               ? `尚有 ${riskReport.summary.blocking} 個高風險項目，請先處理再完成。`
@@ -1311,8 +1311,8 @@ const GeneratorTab: React.FC = () => {
               <button
                 onClick={() => setActiveCategory('ALL')}
                 className={`px-4 py-2 rounded-full whitespace-nowrap text-xs font-bold transition-all flex items-center gap-1.5 ${activeCategory === 'ALL'
-                    ? 'bg-slate-800 text-white shadow-md shadow-slate-200'
-                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100'
+                  ? 'bg-slate-800 text-white shadow-md shadow-slate-200'
+                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100'
                   }`}
               >
                 <i className={`fa-solid fa-layer-group ${activeCategory === 'ALL' ? 'text-blue-300' : 'text-slate-400'}`}></i>
@@ -1332,8 +1332,8 @@ const GeneratorTab: React.FC = () => {
                     key={cat}
                     onClick={() => setActiveCategory(cat)}
                     className={`px-4 py-2 rounded-full whitespace-nowrap text-xs font-bold transition-all flex items-center gap-1.5 ${activeCategory === cat
-                        ? 'bg-slate-800 text-white shadow-md shadow-slate-200'
-                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100'
+                      ? 'bg-slate-800 text-white shadow-md shadow-slate-200'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100'
                       }`}
                   >
                     <i className={`fa-solid ${icon} ${activeCategory === cat ? 'text-blue-300' : 'text-slate-400'}`}></i>
@@ -1368,8 +1368,8 @@ const GeneratorTab: React.FC = () => {
             onClick={handleFinish}
             disabled={riskReport.summary.blocking > 0}
             className={`w-full px-5 py-3 rounded-xl font-black text-base transition shadow-lg flex items-center justify-center gap-2 ${riskReport.summary.blocking > 0
-                ? 'bg-slate-200 text-slate-400 shadow-slate-100 cursor-not-allowed'
-                : 'bg-slate-900 text-white hover:bg-blue-600 shadow-slate-200'
+              ? 'bg-slate-200 text-slate-400 shadow-slate-100 cursor-not-allowed'
+              : 'bg-slate-900 text-white hover:bg-blue-600 shadow-slate-200'
               }`}
           >
             {riskReport.summary.blocking > 0 ? `先排除高風險 (${riskReport.summary.blocking})` : '完成並歸類'}
@@ -1388,71 +1388,68 @@ const GeneratorTab: React.FC = () => {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-6">
         <div className="divide-y divide-slate-50">
           {displayItems.length > 0 ? (
-            {
-              displayItems.length > 0 ? (
-                displayItems.map((item, index) => {
-                  const ruleConfig = getRuleConfig(item.rule);
-                  const prevItem = displayItems[index - 1];
-                  const showGroupHeader = activeCategory === 'ALL' &&
-                    !itemSearch.trim() &&
-                    sortBy === 'default' &&
-                    (!prevItem || prevItem.category !== item.category);
+            displayItems.map((item, index) => {
+              const ruleConfig = getRuleConfig(item.rule);
+              const prevItem = displayItems[index - 1];
+              const showGroupHeader = activeCategory === 'ALL' &&
+                !itemSearch.trim() &&
+                sortBy === 'default' &&
+                (!prevItem || prevItem.category !== item.category);
 
-                  return (
-                    <React.Fragment key={item.id}>
-                      {showGroupHeader && (
-                        <div className="sticky top-[138px] z-10 bg-slate-50/95 backdrop-blur px-5 py-2 border-b border-t border-slate-100 text-xs font-black text-slate-500 tracking-wider uppercase first:border-t-0">
-                          {item.category}
-                        </div>
-                      )}
-                      <div className={`flex items-center justify-between p-4 transition-colors border-b border-slate-50 last:border-0 ${item.checked ? 'bg-white' : 'bg-slate-50/30'}`}>
-                        <div className="flex items-center gap-4 flex-1 cursor-pointer select-none" onClick={() => handleToggleCheck(item.id)}>
-                          <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${item.checked ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 text-transparent bg-white'}`}>
-                            <i className="fa-solid fa-check text-[10px]"></i>
-                          </div>
-                          <div className={item.checked ? 'opacity-100' : 'opacity-60 grayscale'}>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className={`text-base ${item.checked ? 'font-bold text-slate-800' : 'font-medium text-slate-600'}`}>{item.name}</p>
-                              {item.weight && (
-                                <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1">
-                                  <i className="fa-solid fa-weight-hanging text-[8px]"></i> {item.weight}kg
-                                </span>
-                              )}
-                            </div>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-1 w-fit mt-1 border ${ruleConfig.style} ${item.checked ? '' : 'opacity-70'}`}>
-                              <i className={`fa-solid ${ruleConfig.icon}`}></i>
-                              {ruleConfig.label}
-                            </span>
-                          </div>
-                        </div>
-
-                        {item.checked && (
-                          <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-200 shadow-sm ml-2">
-                            <button
-                              onClick={() => handleUpdateQuantity(item.id, -1)}
-                              className="w-7 h-7 flex items-center justify-center rounded bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition"
-                            >
-                              <i className="fa-solid fa-minus text-[10px]"></i>
-                            </button>
-                            <span className="w-6 text-center font-bold text-sm text-slate-700">{item.quantity}</span>
-                            <button
-                              onClick={() => handleUpdateQuantity(item.id, 1)}
-                              className="w-7 h-7 flex items-center justify-center rounded bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition"
-                            >
-                              <i className="fa-solid fa-plus text-[10px]"></i>
-                            </button>
-                          </div>
-                        )}
+              return (
+                <React.Fragment key={item.id}>
+                  {showGroupHeader && (
+                    <div className="sticky top-[138px] z-10 bg-slate-50/95 backdrop-blur px-5 py-2 border-b border-t border-slate-100 text-xs font-black text-slate-500 tracking-wider uppercase first:border-t-0">
+                      {item.category}
+                    </div>
+                  )}
+                  <div className={`flex items-center justify-between p-4 transition-colors border-b border-slate-50 last:border-0 ${item.checked ? 'bg-white' : 'bg-slate-50/30'}`}>
+                    <div className="flex items-center gap-4 flex-1 cursor-pointer select-none" onClick={() => handleToggleCheck(item.id)}>
+                      <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${item.checked ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 text-transparent bg-white'}`}>
+                        <i className="fa-solid fa-check text-[10px]"></i>
                       </div>
-                    </React.Fragment>
-                  )
-                })
-              ) : (
-                <div className="p-8 text-center text-slate-400">
-                  此分類無物品
-                </div>
+                      <div className={item.checked ? 'opacity-100' : 'opacity-60 grayscale'}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className={`text-base ${item.checked ? 'font-bold text-slate-800' : 'font-medium text-slate-600'}`}>{item.name}</p>
+                          {item.weight && (
+                            <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1">
+                              <i className="fa-solid fa-weight-hanging text-[8px]"></i> {item.weight}kg
+                            </span>
+                          )}
+                        </div>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-1 w-fit mt-1 border ${ruleConfig.style} ${item.checked ? '' : 'opacity-70'}`}>
+                          <i className={`fa-solid ${ruleConfig.icon}`}></i>
+                          {ruleConfig.label}
+                        </span>
+                      </div>
+                    </div>
+
+                    {item.checked && (
+                      <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-200 shadow-sm ml-2">
+                        <button
+                          onClick={() => handleUpdateQuantity(item.id, -1)}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition"
+                        >
+                          <i className="fa-solid fa-minus text-[10px]"></i>
+                        </button>
+                        <span className="w-6 text-center font-bold text-sm text-slate-700">{item.quantity}</span>
+                        <button
+                          onClick={() => handleUpdateQuantity(item.id, 1)}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition"
+                        >
+                          <i className="fa-solid fa-plus text-[10px]"></i>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </React.Fragment>
               )
-            }
+            })
+          ) : (
+            <div className="p-8 text-center text-slate-400">
+              此分類無物品
+            </div>
+          )
           </div>
 
         {/* Add Custom Item & Rule Selection */}
