@@ -50,6 +50,15 @@ export type MetricsResponse = {
     resolvedByAction: Array<{ action: string; count: number }>;
     resolvedByType: Array<{ issueType: string; count: number }>;
   };
+  riskModeKpi?: {
+    totalChanges: number;
+    switchedToStandard: number;
+    switchedToConservative: number;
+    sessionsChanged: number;
+    sessionsStayedStandard: number;
+    sessionsStayedConservative: number;
+    standardStayRate: number;
+  };
 };
 
 export type RecentEventsResponse = {

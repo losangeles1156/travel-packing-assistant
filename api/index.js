@@ -2,6 +2,21 @@ import { createClient } from '@supabase/supabase-js';
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
+import { computeRiskModeKpi } from './riskModeMetrics.js';
+
+let redis = null;
+const hasKV = !!process.env.KV_REST_API_URL;
+if (hasKV) {
+  try {
+    const { Redis } = await import('@upstash/redis');
+    redis = new Redis({
+      url: process.env.KV_REST_API_URL,
+      token: process.env.KV_REST_API_TOKEN,
+    });
+  } catch (err) {
+    console.warn('Failed to initialize Upstash Redis:', err.message);
+  }
+}
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -117,16 +132,42 @@ const requireAdmin = (req, res, next) => {
   res.status(401).json({ ok: false, code: 'UNAUTHORIZED' });
 };
 
-const limitHit = (map, key, limit, windowMs) => {
+const isRateLimited = async (prefix, key, limit, windowMs, memoryMap) => {
+  if (hasKV && redis) {
+    const fullKey = `ratelimit:${prefix}:${key}`;
+    try {
+      const count = await redis.incr(fullKey);
+      if (count === 1) {
+        await redis.pexpire(fullKey, windowMs);
+      }
+      return count > limit;
+    } catch (err) {
+      console.warn('KV Rate limit failed, allowing request:', err.message);
+      return false;
+    }
+  }
+
   const now = Date.now();
-  const cur = map.get(key);
+  const cur = memoryMap.get(key);
   if (!cur || now >= cur.reset) {
-    map.set(key, { count: 1, reset: now + windowMs });
+    memoryMap.set(key, { count: 1, reset: now + windowMs });
     return false;
   }
   if (cur.count >= limit) return true;
   cur.count += 1;
   return false;
+};
+
+const MAX_EVENT_PAYLOAD_BYTES = 5000;
+
+const isValidShareSnapshot = (snapshot) => {
+  if (!snapshot || typeof snapshot !== 'object') return false;
+  if (snapshot.schemaVersion !== 1) return false;
+  if (!snapshot.id || typeof snapshot.id !== 'string') return false;
+  if (!snapshot.trip || typeof snapshot.trip !== 'object') return false;
+  if (!Array.isArray(snapshot.items)) return false;
+  if (!Array.isArray(snapshot.tasks)) return false;
+  return true;
 };
 
 const isValidClientId = (value, max = 128) => {
@@ -200,6 +241,7 @@ api.use((req, res, next) => {
 
 api.get('/admin/metrics', requireAdmin, async (req, res) => {
   const days = clampInt(req.query?.days, 1, 180, 30);
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
   try {
     const [
@@ -210,6 +252,7 @@ api.get('/admin/metrics', requireAdmin, async (req, res) => {
       { data: searchTerms },
       { data: templateUsage },
       { data: riskKpi },
+      { data: riskModeEvents },
     ] = await Promise.all([
       supabase.rpc('get_daily_metrics', { p_days: days }),
       supabase.rpc('get_top_events', { p_days: days, p_limit: 30 }),
@@ -218,11 +261,19 @@ api.get('/admin/metrics', requireAdmin, async (req, res) => {
       supabase.rpc('get_top_search_terms', { p_days: days, p_limit: 20 }),
       supabase.rpc('get_template_usage', { p_days: days, p_limit: 20 }),
       supabase.rpc('get_risk_kpi', { p_days: days }),
+      supabase
+        .from('events')
+        .select('session_id,payload,created_at')
+        .eq('name', 'risk_mode_changed')
+        .gte('created_at', since)
+        .order('created_at', { ascending: true })
+        .limit(5000),
     ]);
+    const riskModeKpi = computeRiskModeKpi(riskModeEvents || []);
 
     res.json({
       ok: true,
-      range: { days, until: new Date().toISOString() },
+      range: { days, since, until: new Date().toISOString() },
       dailyActive: dailyActive || [],
       topEvents: topEvents || [],
       funnel: funnel || {},
@@ -230,6 +281,7 @@ api.get('/admin/metrics', requireAdmin, async (req, res) => {
       topSearchTerms: searchTerms || [],
       templateUsage: templateUsage || {},
       riskKpi: riskKpi || {},
+      riskModeKpi,
     });
   } catch (err) {
     console.error('Metrics Error:', err);
@@ -262,17 +314,27 @@ api.post('/events', async (req, res) => {
   const { userId, sessionId, name, payload, meta } = req.body || {};
   const ip = getRequestIp(req);
 
-  if (limitHit(ipEventMap, ip, EVENT_IP_LIMIT, EVENT_WINDOW_MS)) {
+  if (await isRateLimited('ipEvent', ip, EVENT_IP_LIMIT, EVENT_WINDOW_MS, ipEventMap)) {
     return res.status(429).json({ ok: false, code: 'RATE_LIMITED' });
   }
 
   const sessionKey = `${userId || ''}:${sessionId || ''}`;
-  if (limitHit(sessionEventMap, sessionKey, EVENT_SESSION_LIMIT, EVENT_WINDOW_MS)) {
+  if (await isRateLimited('sessionEvent', sessionKey, EVENT_SESSION_LIMIT, EVENT_WINDOW_MS, sessionEventMap)) {
     return res.status(429).json({ ok: false, code: 'SESSION_RATE_LIMITED' });
   }
 
   if (!isValidClientId(userId) || !isValidClientId(sessionId) || !isValidEventName(name)) {
     return res.status(400).json({ ok: false, code: 'INVALID_EVENT_PAYLOAD' });
+  }
+
+  let payloadSize = 0;
+  try {
+    payloadSize = JSON.stringify(payload ?? {}).length;
+  } catch {
+    return res.status(400).json({ ok: false, code: 'INVALID_EVENT_PAYLOAD' });
+  }
+  if (payloadSize > MAX_EVENT_PAYLOAD_BYTES) {
+    return res.status(413).json({ ok: false, code: 'PAYLOAD_TOO_LARGE' });
   }
 
   const locale = normalizeText(meta?.locale, 64);
@@ -312,8 +374,12 @@ api.post('/share', async (req, res) => {
   const { snapshot } = req.body || {};
   const ip = getRequestIp(req);
 
-  if (limitHit(ipShareMap, ip, SHARE_IP_LIMIT, SHARE_WINDOW_MS)) {
+  if (await isRateLimited('ipShare', ip, SHARE_IP_LIMIT, SHARE_WINDOW_MS, ipShareMap)) {
     return res.status(429).json({ ok: false, code: 'RATE_LIMITED' });
+  }
+
+  if (!isValidShareSnapshot(snapshot)) {
+    return res.status(400).json({ ok: false, code: 'INVALID_SNAPSHOT' });
   }
 
   const shareId = generateShareId();

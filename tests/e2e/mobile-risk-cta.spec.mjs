@@ -20,6 +20,7 @@ const addBlockingRiskItem = async (page) => {
   const ruleSelect = page.locator('select:has(option[value="Strict_Checked"])').first();
   await ruleSelect.selectOption('Strict_Checked');
 
+  page.once('dialog', (dialog) => dialog.accept());
   await itemInput.press('Enter');
 };
 
@@ -28,11 +29,18 @@ test.describe('mobile risk card and fixed bottom CTA', () => {
     await startTrip(page);
     await expect(page.getByText('法律風險提醒', { exact: false })).toBeVisible();
     await expect(page.getByText('違禁品可能涉及沒收、罰款甚至刑責', { exact: false })).toBeVisible();
+    await expect(page.getByText('目前模式：保守清零（Critical + High）', { exact: false })).toBeVisible();
     await page.getByRole('button', { name: '旅客易懂版' }).click();
     await expect(page.getByText('先把最容易出問題的物品先處理掉', { exact: false })).toBeVisible();
     await page.getByRole('button', { name: '法規嚴肅版' }).click();
     await expect(page.getByText('違禁品可能涉及沒收、罰款甚至刑責', { exact: false })).toBeVisible();
+    await page.getByRole('button', { name: '一般（只擋 Critical）' }).click();
+    await expect(page.getByText('一般模式不會強制擋下 High 風險', { exact: false })).toBeVisible();
+    await page.getByRole('button', { name: '保守（Critical + High 必清零）' }).click();
+    await expect(page.getByText('目前模式：保守清零（Critical + High）', { exact: false })).toBeVisible();
     await addBlockingRiskItem(page);
+    await expect(page.getByText('安檢前 3 分鐘檢查清單', { exact: false })).toBeVisible();
+    await expect(page.getByRole('button', { name: '定位處理' }).first()).toBeVisible();
 
     const mobileBottomCta = page.locator('div.fixed.bottom-0.left-0.right-0.z-20 button').first();
     await expect(mobileBottomCta).toBeVisible();

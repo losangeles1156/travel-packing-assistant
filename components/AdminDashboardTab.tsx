@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { trackEvent } from '../services/analyticsService';
 import { TRIP_TEMPLATES } from '../constants';
+import { buildRiskModeAlert } from '../utils/riskModeAlert.js';
 import {
   AdminApiError,
   buildAdminHeaders,
@@ -31,6 +32,7 @@ const AdminDashboardTab: React.FC = () => {
   const [recentQuery, setRecentQuery] = useState('');
   const [recentExactName, setRecentExactName] = useState('');
   const [cleanupDays, setCleanupDays] = useState(120);
+  const [modeAlertThreshold, setModeAlertThreshold] = useState(20);
   const [cleanupBusy, setCleanupBusy] = useState(false);
   const [cleanupError, setCleanupError] = useState<string | null>(null);
   const [cleanupResult, setCleanupResult] = useState<CleanupResponse | null>(null);
@@ -167,6 +169,11 @@ const AdminDashboardTab: React.FC = () => {
   const funnel = metrics?.funnel;
   const stepFunnel = metrics?.stepFunnel;
   const riskKpi = metrics?.riskKpi;
+  const riskModeKpi = metrics?.riskModeKpi;
+  const riskModeAlert = useMemo(
+    () => buildRiskModeAlert(riskModeKpi, modeAlertThreshold),
+    [riskModeKpi, modeAlertThreshold]
+  );
 
   return (
     <div className="max-w-5xl mx-auto pb-24">
@@ -221,6 +228,58 @@ const AdminDashboardTab: React.FC = () => {
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <div className="text-xs font-black text-slate-400 uppercase">DAU 峰值</div>
           <div className="mt-2 text-3xl font-black text-slate-900">{metrics ? totals.dauPeak : '-'}</div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="text-lg font-black text-slate-900">風險模式採用</div>
+          <div className="text-xs text-slate-500">目標：降低停留在一般模式（非清零）比例</div>
+        </div>
+        <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-2">
+          <label className="text-xs text-slate-500 font-bold">告警門檻（一般模式留存率）</label>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={modeAlertThreshold}
+            onChange={(e) => setModeAlertThreshold(Number(e.target.value))}
+            className="border border-slate-200 rounded-lg px-2.5 py-1.5 w-24 font-mono text-xs text-slate-700 bg-white"
+          />
+          <span className="text-xs text-slate-400">%</span>
+        </div>
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="border border-slate-200 rounded-xl p-4">
+            <div className="text-xs text-slate-500">模式切換總次數</div>
+            <div className="mt-1 text-2xl font-black text-slate-900">{riskModeKpi ? riskModeKpi.totalChanges : '-'}</div>
+          </div>
+          <div className="border border-slate-200 rounded-xl p-4">
+            <div className="text-xs text-slate-500">切到一般模式</div>
+            <div className="mt-1 text-2xl font-black text-amber-700">{riskModeKpi ? riskModeKpi.switchedToStandard : '-'}</div>
+          </div>
+          <div className="border border-slate-200 rounded-xl p-4">
+            <div className="text-xs text-slate-500">留在一般模式 Session</div>
+            <div className="mt-1 text-2xl font-black text-red-700">{riskModeKpi ? riskModeKpi.sessionsStayedStandard : '-'}</div>
+          </div>
+          <div className="border border-slate-200 rounded-xl p-4">
+            <div className="text-xs text-slate-500">一般模式留存率</div>
+            <div className="mt-1 text-2xl font-black text-red-700">{riskModeKpi ? `${riskModeKpi.standardStayRate}%` : '-'}</div>
+          </div>
+        </div>
+        <div
+          className={`mt-3 rounded-xl border p-3 text-xs font-bold ${
+            riskModeAlert.level === 'danger'
+              ? 'border-red-300 bg-red-50 text-red-800'
+              : riskModeAlert.level === 'safe'
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                : 'border-slate-200 bg-slate-50 text-slate-600'
+          }`}
+        >
+          <div>{riskModeAlert.message}</div>
+          {riskModeAlert.recommendation && <div className="mt-1 opacity-90">{riskModeAlert.recommendation}</div>}
+        </div>
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+          口徑：以每個 Session 在觀測區間內最後一次 <span className="font-mono">risk_mode_changed</span> 為準；最後模式為 standard 視為「留在一般模式」。
         </div>
       </div>
 

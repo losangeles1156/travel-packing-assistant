@@ -14,7 +14,6 @@ export const useCollabSession = (
     onRemoteUpdate: (snapshot: ListSnapshot) => void
 ) => {
     const [sessionId, setSessionId] = useState<string | null>(null);
-    const [onlineCount, setOnlineCount] = useState(1);
     const [isSyncing, setIsSyncing] = useState(false);
     const ignoreNextLocalUpdate = useRef(false);
     const debounceTimer = useRef<NodeJS.Timeout | null>(null);

@@ -12,6 +12,8 @@ import { analyzePackingRisks } from '../utils/riskEngine.js';
 import { applyRiskResolution } from '../utils/riskActions.js';
 import { compareRiskIssues, getConsequenceLabel } from '../utils/riskPriority.js';
 import { getRiskBannerCopy, resolveRiskCopyVariant } from '../utils/riskBannerCopy.js';
+import { buildRiskGatePrompt, buildSecurityGateChecklist, evaluateNewItemRiskGate } from '../utils/riskFlowEnhancements.js';
+import { buildRiskGateReport, normalizeRiskMode } from '../utils/riskPolicy.js';
 import {
   createEmptyListSnapshot,
   getActiveListId,
@@ -115,7 +117,9 @@ const GeneratorTab: React.FC = () => {
   const [newRuleColor, setNewRuleColor] = useState('bg-purple-50 text-purple-600 border-purple-200');
   const [riskGateTouched, setRiskGateTouched] = useState(false);
   const [riskCopyVariant, setRiskCopyVariant] = useState<'serious' | 'friendly'>('serious');
+  const [riskMode, setRiskMode] = useState<'standard' | 'conservative'>('conservative');
   const [expandedRiskKey, setExpandedRiskKey] = useState<string | null>(null);
+  const [focusedRiskItemId, setFocusedRiskItemId] = useState<string | null>(null);
   const [lastBulkResolveSnapshot, setLastBulkResolveSnapshot] = useState<PackingItem[] | null>(null);
   const [lastBulkResolveCount, setLastBulkResolveCount] = useState(0);
 
@@ -519,7 +523,7 @@ const GeneratorTab: React.FC = () => {
   };
 
   const resolveAllBlockingRisks = () => {
-    const blockingIssues = riskReport.issues.filter((i) => i.blocking);
+    const blockingIssues = riskGateReport.blockingIssues;
     if (blockingIssues.length === 0) return;
     setLastBulkResolveSnapshot(items.map((item) => ({ ...item })));
     setLastBulkResolveCount(blockingIssues.length);
@@ -530,6 +534,7 @@ const GeneratorTab: React.FC = () => {
     setItems(nextItems);
     trackEvent('risk_bulk_resolved', {
       count: blockingIssues.length,
+      mode: riskMode,
       country: tripCountry,
       direction: tripDirection,
       rulesetVersion: RISK_RULESET_META.version,
@@ -563,6 +568,38 @@ const GeneratorTab: React.FC = () => {
       isDaily: false,
       checked: true,
     };
+
+    const gate = evaluateNewItemRiskGate(
+      newItem,
+      customRuleById,
+      { country: tripCountry, direction: tripDirection },
+      riskMode
+    );
+    if (gate.shouldBlock && gate.issue && typeof window !== 'undefined') {
+      trackEvent('risk_add_intercept_shown', {
+        itemName: newItem.name,
+        type: gate.issue.type,
+        consequenceLevel: gate.issue.consequenceLevel,
+        mode: riskMode,
+      });
+      const proceed = window.confirm(buildRiskGatePrompt(gate.issue));
+      if (!proceed) {
+        trackEvent('risk_add_intercept_blocked', {
+          itemName: newItem.name,
+          type: gate.issue.type,
+          consequenceLevel: gate.issue.consequenceLevel,
+          mode: riskMode,
+        });
+        return;
+      }
+      trackEvent('risk_add_intercept_overridden', {
+        itemName: newItem.name,
+        type: gate.issue.type,
+        consequenceLevel: gate.issue.consequenceLevel,
+        mode: riskMode,
+      });
+    }
+
     setItems([...items, newItem]);
     setCustomItemName('');
     setCustomItemWeight('');
@@ -605,6 +642,10 @@ const GeneratorTab: React.FC = () => {
     () => analyzePackingRisks(selectedItems, customRuleById, { country: tripCountry, direction: tripDirection }),
     [selectedItems, customRuleById, tripCountry, tripDirection]
   );
+  const riskGateReport = useMemo(
+    () => buildRiskGateReport(riskReport.issues, riskMode),
+    [riskReport.issues, riskMode]
+  );
 
   const countryNameByCode = useMemo(
     () => new Map(SUPPORTED_COUNTRIES.map(c => [c.code, c.name])),
@@ -617,13 +658,31 @@ const GeneratorTab: React.FC = () => {
   const sortedRiskIssues = useMemo(() => [...riskReport.issues].sort(compareRiskIssues), [riskReport.issues]);
   const riskBannerCopy = useMemo(() => getRiskBannerCopy(riskCopyVariant), [riskCopyVariant]);
   const topBlockingIssue = useMemo(
-    () => sortedRiskIssues.find((issue) => issue.blocking) || null,
-    [sortedRiskIssues]
+    () => riskGateReport.blockingIssues[0] || null,
+    [riskGateReport.blockingIssues]
   );
+  const securityGateChecklist = useMemo(
+    () => buildSecurityGateChecklist(riskGateReport.blockingIssues, 5),
+    [riskGateReport.blockingIssues]
+  );
+  const riskModeGuidance = useMemo(() => {
+    if (riskMode === 'conservative') {
+      return {
+        title: '目前模式：保守清零（Critical + High）',
+        description: '系統會把 Critical 與 High 都視為必處理，較符合「風險清零」目標。',
+        panelClass: 'border-rose-200 bg-rose-100/60 text-rose-800',
+      };
+    }
+    return {
+      title: '目前模式：一般（僅擋 Critical）',
+      description: '流程只會強制攔截 Critical；High 風險需由你自行判斷是否先處理。',
+      panelClass: 'border-amber-300 bg-amber-100/70 text-amber-900',
+    };
+  }, [riskMode]);
 
   useEffect(() => {
     const prev = lastBlockingCountRef.current;
-    const next = riskReport.summary.blocking;
+    const next = riskGateReport.blocking;
     if (prev === null) {
       lastBlockingCountRef.current = next;
       return;
@@ -637,22 +696,23 @@ const GeneratorTab: React.FC = () => {
       });
     }
     lastBlockingCountRef.current = next;
-  }, [riskReport.summary.blocking, destination, tripCountry, tripDirection]);
+  }, [riskGateReport.blocking, destination, tripCountry, tripDirection]);
 
   const handleFinish = () => {
     setRiskGateTouched(true);
-    if (riskReport.summary.blocking > 0) {
+    if (riskGateReport.blocking > 0) {
       trackEvent('risk_gate_blocked', {
         destination,
+        mode: riskMode,
         country: tripCountry,
         direction: tripDirection,
         rulesetVersion: RISK_RULESET_META.version,
-        blocking: riskReport.summary.blocking,
-        critical: riskReport.summary.critical,
-        high: riskReport.summary.high,
+        blocking: riskGateReport.blocking,
+        critical: riskGateReport.critical,
+        high: riskGateReport.high,
       });
       const consequence = topBlockingIssue?.penalty ? `\n${topBlockingIssue.penalty}` : '';
-      alert(`仍有 ${riskReport.summary.blocking} 個高風險項目未處理，請先修正後再完成。${consequence}`);
+      alert(`仍有 ${riskGateReport.blocking} 個高風險項目未處理，請先修正後再完成。${consequence}`);
       return;
     }
 
@@ -672,6 +732,22 @@ const GeneratorTab: React.FC = () => {
     });
 
     setStep(2);
+  };
+
+  const handleFocusRiskItem = (itemId: string) => {
+    setActiveCategory('ALL');
+    setItemSearch('');
+    setFocusedRiskItemId(itemId);
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => {
+        const target = document.getElementById(`item-row-${itemId}`);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 50);
+      window.setTimeout(() => setFocusedRiskItemId(null), 1800);
+    }
+    trackEvent('risk_checklist_focus_item', { itemId });
   };
 
   // Helper function to get visual config for rules
@@ -732,6 +808,12 @@ const GeneratorTab: React.FC = () => {
     const resolved = resolveRiskCopyVariant({ queryValue, storedValue: stored });
     setRiskCopyVariant(resolved as 'serious' | 'friendly');
     window.localStorage.setItem('tpa_risk_copy_variant', resolved);
+
+    const modeQuery = params.get('riskMode');
+    const modeStored = window.localStorage.getItem('tpa_risk_mode');
+    const resolvedMode = normalizeRiskMode(modeQuery || modeStored || 'conservative');
+    setRiskMode(resolvedMode as 'standard' | 'conservative');
+    window.localStorage.setItem('tpa_risk_mode', resolvedMode);
   }, []);
 
   const handleRiskCopyVariantChange = (variant: 'serious' | 'friendly') => {
@@ -740,6 +822,15 @@ const GeneratorTab: React.FC = () => {
       window.localStorage.setItem('tpa_risk_copy_variant', variant);
     }
     trackEvent('risk_copy_variant_changed', { variant });
+  };
+
+  const handleRiskModeChange = (mode: 'standard' | 'conservative') => {
+    const normalized = normalizeRiskMode(mode) as 'standard' | 'conservative';
+    setRiskMode(normalized);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('tpa_risk_mode', normalized);
+    }
+    trackEvent('risk_mode_changed', { mode: normalized });
   };
 
   useEffect(() => {
@@ -1056,13 +1147,13 @@ const GeneratorTab: React.FC = () => {
             </button>
             <button
               onClick={handleFinish}
-              disabled={riskReport.summary.blocking > 0}
-              className={`hidden md:flex px-6 py-3 rounded-xl font-bold transition shadow-lg items-center justify-center gap-2 ${riskReport.summary.blocking > 0
+              disabled={riskGateReport.blocking > 0}
+              className={`hidden md:flex px-6 py-3 rounded-xl font-bold transition shadow-lg items-center justify-center gap-2 ${riskGateReport.blocking > 0
                 ? 'bg-slate-200 text-slate-400 shadow-slate-100 cursor-not-allowed'
                 : 'bg-slate-900 text-white hover:bg-blue-600 shadow-slate-200'
                 }`}
             >
-              {riskReport.summary.blocking > 0 ? `先排除高風險 (${riskReport.summary.blocking})` : '完成並歸類'} <i className="fa-solid fa-check-circle"></i>
+              {riskGateReport.blocking > 0 ? `先排除高風險 (${riskGateReport.blocking})` : '完成並歸類'} <i className="fa-solid fa-check-circle"></i>
             </button>
             {!collabSessionId ? (
               <button
@@ -1126,10 +1217,43 @@ const GeneratorTab: React.FC = () => {
               旅客易懂版
             </button>
           </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-black text-rose-700">風險模式：</span>
+            <button
+              onClick={() => handleRiskModeChange('standard')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-black border ${
+                riskMode === 'standard'
+                  ? 'border-slate-700 bg-slate-700 text-white'
+                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              一般（只擋 Critical）
+            </button>
+            <button
+              onClick={() => handleRiskModeChange('conservative')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-black border ${
+                riskMode === 'conservative'
+                  ? 'border-rose-700 bg-rose-700 text-white'
+                  : 'border-rose-300 bg-white text-rose-700 hover:bg-rose-100'
+              }`}
+            >
+              保守（Critical + High 必清零）
+            </button>
+          </div>
+          <div className={`mt-2 rounded-lg border px-2.5 py-2 text-[11px] font-bold ${riskModeGuidance.panelClass}`}>
+            <div>{riskModeGuidance.title}</div>
+            <div className="mt-0.5 opacity-90">{riskModeGuidance.description}</div>
+          </div>
+          {riskMode === 'standard' && (
+            <div className="mt-2 rounded-lg border border-red-300 bg-red-100/80 px-2.5 py-2 text-[11px] font-black text-red-800">
+              <i className="fa-solid fa-triangle-exclamation mr-1.5" />
+              注意：一般模式不會強制擋下 High 風險。若你的目標是風險清零，建議切回保守模式。
+            </div>
+          )}
         </div>
 
         <div
-          className={`mb-5 rounded-2xl border p-4 ${riskReport.summary.blocking > 0
+          className={`mb-5 rounded-2xl border p-4 ${riskGateReport.blocking > 0
             ? 'border-red-300 bg-red-50'
             : riskReport.summary.total > 0
               ? 'border-amber-300 bg-amber-50'
@@ -1138,7 +1262,7 @@ const GeneratorTab: React.FC = () => {
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className={`text-sm font-black ${riskReport.summary.blocking > 0 ? 'text-red-700' : 'text-slate-800'}`}>
+              <div className={`text-sm font-black ${riskGateReport.blocking > 0 ? 'text-red-700' : 'text-slate-800'}`}>
                 <i className="fa-solid fa-shield-halved mr-2"></i>出入境風險檢查
               </div>
               <div className="mt-1 text-[11px] text-slate-500">
@@ -1159,28 +1283,57 @@ const GeneratorTab: React.FC = () => {
             </div>
           </div>
 
-          <div className={`mt-3 rounded-xl border px-3 py-2 text-sm font-bold ${riskReport.summary.blocking > 0
+          <div className={`mt-3 rounded-xl border px-3 py-2 text-sm font-bold ${riskGateReport.blocking > 0
             ? 'border-red-200 bg-red-100/60 text-red-700'
             : 'border-emerald-200 bg-emerald-100/70 text-emerald-700'
             }`}>
-            {riskReport.summary.blocking > 0
-              ? `尚有 ${riskReport.summary.blocking} 個高風險項目，請先處理再完成。`
+            {riskGateReport.blocking > 0
+              ? `尚有 ${riskGateReport.blocking} 個高風險項目，請先處理再完成。`
               : '高風險已清零，可安全完成歸類。'}
           </div>
-          {riskReport.summary.blocking > 0 && (
+          {riskGateReport.blocking > 0 && (
             <div className="mt-2 text-xs font-semibold text-red-700">
               為什麼這很重要：高風險項目可能在安檢被沒收、延誤登機，嚴重時會有罰款或法律責任。
             </div>
           )}
-          {riskReport.summary.blocking > 0 && topBlockingIssue?.penalty && (
+          {riskGateReport.blocking > 0 && topBlockingIssue?.penalty && (
             <div className="mt-2 rounded-xl border border-red-300 bg-red-50 px-3 py-2.5 text-xs font-black text-red-800">
               <i className="fa-solid fa-triangle-exclamation mr-1.5" />
               最高風險可能後果：{topBlockingIssue.penalty.replace(/^可能後果：/, '')}
             </div>
           )}
+          <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+            <div className="text-xs font-black text-slate-800">
+              <i className="fa-solid fa-stopwatch mr-1.5 text-slate-500" />
+              安檢前 3 分鐘檢查清單
+            </div>
+            <div className="mt-1 text-[11px] text-slate-600">
+              只列出尚未處理的高風險項目，請逐項定位並處理。
+            </div>
+            {securityGateChecklist.length > 0 ? (
+              <div className="mt-2 space-y-1.5">
+                {securityGateChecklist.map((issue) => (
+                  <div key={`gate-${issue.itemId}-${issue.type}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-black text-slate-800 truncate">{issue.itemName}</div>
+                      <div className="text-[10px] text-slate-500">{getConsequenceLabel(issue.consequenceLevel)} ・ {issue.severity}</div>
+                    </div>
+                    <button
+                      onClick={() => handleFocusRiskItem(issue.itemId)}
+                      className="shrink-0 text-[11px] font-black px-2.5 py-1 rounded-md border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                    >
+                      定位處理
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-2 text-[11px] font-semibold text-emerald-700">目前沒有待處理高風險項目。</div>
+            )}
+          </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            {riskReport.summary.blocking > 0 && (
+            {riskGateReport.blocking > 0 && (
               <button
                 onClick={resolveAllBlockingRisks}
                 className="text-xs font-black px-3 py-2 rounded-lg border border-red-200 bg-white text-red-700 hover:bg-red-100 transition"
@@ -1297,7 +1450,7 @@ const GeneratorTab: React.FC = () => {
             </div>
           )}
 
-          {riskGateTouched && riskReport.summary.blocking > 0 && (
+          {riskGateTouched && riskGateReport.blocking > 0 && (
             <div className="mt-3 text-xs font-bold text-red-600">
               產品核心：先清除違規風險，再進入最終清單。
             </div>
@@ -1423,13 +1576,13 @@ const GeneratorTab: React.FC = () => {
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200 bg-white/95 backdrop-blur px-4 py-3">
           <button
             onClick={handleFinish}
-            disabled={riskReport.summary.blocking > 0}
-            className={`w-full px-5 py-3 rounded-xl font-black text-base transition shadow-lg flex items-center justify-center gap-2 ${riskReport.summary.blocking > 0
+            disabled={riskGateReport.blocking > 0}
+            className={`w-full px-5 py-3 rounded-xl font-black text-base transition shadow-lg flex items-center justify-center gap-2 ${riskGateReport.blocking > 0
               ? 'bg-slate-200 text-slate-400 shadow-slate-100 cursor-not-allowed'
               : 'bg-slate-900 text-white hover:bg-blue-600 shadow-slate-200'
               }`}
           >
-            {riskReport.summary.blocking > 0 ? `先排除高風險 (${riskReport.summary.blocking})` : '完成並歸類'}
+            {riskGateReport.blocking > 0 ? `先排除高風險 (${riskGateReport.blocking})` : '完成並歸類'}
             <i className="fa-solid fa-check-circle"></i>
           </button>
         </div>
@@ -1460,7 +1613,16 @@ const GeneratorTab: React.FC = () => {
                       {item.category}
                     </div>
                   )}
-                  <div className={`flex items-center justify-between p-4 transition-colors border-b border-slate-50 last:border-0 ${item.checked ? 'bg-white' : 'bg-slate-50/30'}`}>
+                  <div
+                    id={`item-row-${item.id}`}
+                    className={`flex items-center justify-between p-4 transition-colors border-b border-slate-50 last:border-0 ${
+                      focusedRiskItemId === item.id
+                        ? 'bg-yellow-50 ring-2 ring-yellow-200'
+                        : item.checked
+                          ? 'bg-white'
+                          : 'bg-slate-50/30'
+                    }`}
+                  >
                     <div className="flex items-center gap-4 flex-1 cursor-pointer select-none" onClick={() => handleToggleCheck(item.id)}>
                       <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${item.checked ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 text-transparent bg-white'}`}>
                         <i className="fa-solid fa-check text-[10px]"></i>
