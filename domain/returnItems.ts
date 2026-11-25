@@ -28,6 +28,22 @@ export const prohibitedReturnCategories: ReadonlySet<ReturnCategory> = new Set([
 export function expenseReturnCategories(expense:{title:string;note:string}) {
   return suggestReturnCategories(`${expense.title}｜${expense.note}`);
 }
+// 臺北關「入境旅客在哪些情況下需要申報？」(officialSources: tw-customs)，2026-11-25 查閱：總值「逾」此金額須申報。
+export const TW_GOODS_DECLARATION_TWD = 35000;
+export function goodsDeclarationStatus(twd:string):'below'|'near'|'over' {
+  const value=Number(twd);
+  return value>TW_GOODS_DECLARATION_TWD ? 'over' : value>=TW_GOODS_DECLARATION_TWD*0.8 ? 'near' : 'below';
+}
+type BorderItem = import('./expenses').CrossBorderItem;
+export function returnCheckGroups(items:BorderItem[]) {
+  const kinds=(item:BorderItem)=>new Set<string>([item.category,...suggestReturnCategories(`${item.title}｜${item.ingredients}`).map(c=>c.id)]);
+  const carried=items.filter(item=>item.intent==='carry');
+  return {
+    undecided:items.filter(item=>item.intent==='undecided'),
+    quarantine:carried.filter(item=>{const k=kinds(item);return k.has('animal')||k.has('plant');}),
+    alcoholTobacco:carried.filter(item=>kinds(item).has('alcohol_tobacco')),
+  };
+}
 export function classifyReturnItems(inputs: InputMap) {
   const read=(key:string)=>{const i=inputs[key];return i?.source==='user' && Number.isFinite(Date.parse(i.confirmedAt)) && typeof i.value==='string' ? i.value.trim() : '';};
   const items=read('returnItems'), destination=read('returnDestination');

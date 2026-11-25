@@ -19,11 +19,13 @@ export function isExpense(value:unknown):value is Expense {
   if ((v.receiptImage !== undefined && !isReceiptImage(v.receiptImage)) || (v.returnItem !== undefined && !isReturnItem(v.returnItem)) || !text(v.id,200)||!v.id || !text(v.title,200)||!v.title.trim() || !text(v.amount,15)||!/^\d{1,10}(\.\d{1,2})?$/.test(v.amount) || !text(v.currency,3)||! /^[A-Z]{3}$/.test(v.currency) || !text(v.date,10) || !['food','transport','lodging','shopping','other'].includes(v.category) || !text(v.disruptionId,200) || !['unknown','kept','needed'].includes(v.receipt) || !text(v.note,500)) return false;
   return !v.date || (/^\d{4}-\d{2}-\d{2}$/.test(v.date) && Number.isFinite(Date.parse(`${v.date}T00:00:00Z`)) && new Date(`${v.date}T00:00:00Z`).toISOString().slice(0,10)===v.date);
 }
+const toCents=(amount:string)=>{const [whole,fraction='']=amount.split('.');return BigInt(whole)*100n+BigInt((fraction+'00').slice(0,2));};
+const fromCents=(cents:bigint)=>`${cents/100n}.${String(cents%100n).padStart(2,'0')}`;
 /** Decimal arithmetic in cents; currencies remain separate and no exchange rate is implied. */
 export function expenseTotals(expenses:Expense[]):{currency:string;amount:string}[] {
   const totals=new Map<string,bigint>();
-  for(const expense of expenses){const [whole,fraction='']=expense.amount.split('.');const cents=BigInt(whole)*100n+BigInt((fraction+'00').slice(0,2));totals.set(expense.currency,(totals.get(expense.currency)||0n)+cents);}
-  return [...totals].sort(([a],[b])=>a.localeCompare(b)).map(([currency,cents])=>({currency,amount:`${cents/100n}.${String(cents%100n).padStart(2,'0')}`}));
+  for(const expense of expenses)totals.set(expense.currency,(totals.get(expense.currency)||0n)+toCents(expense.amount));
+  return [...totals].sort(([a],[b])=>a.localeCompare(b)).map(([currency,cents])=>({currency,amount:fromCents(cents)}));
 }
 
 export type ExchangeRate = {base:string;target:string;rate:string;date:string;source:string};
@@ -98,6 +100,20 @@ export function linkExpenseItems(items: CrossBorderItem[], expenseId: string, se
     const { expenseId: _, ...unlinked } = item;
     return unlinked;
   });
+}
+
+/** Shopping that may come home, in TWD via the user's own rates. A payment drops out only when every linked item stays abroad. */
+export function shoppingTotalInTwd(expenses:Expense[], items:CrossBorderItem[], rates:ExchangeRate[]) {
+  const staysAbroad=(expense:Expense)=>{const linked=items.filter(item=>item.expenseId===expense.id);return linked.length>0 && linked.every(item=>item.intent==='local'||item.intent==='leave');};
+  const counted=expenses.filter(expense=>expense.category==='shopping' && !staysAbroad(expense));
+  let cents=0n,converted=0;const missingRates:string[]=[];
+  for(const total of expenseTotals(counted)){
+    const rate=rates.find(r=>r.base===total.currency && r.target==='TWD');
+    if(total.currency!=='TWD' && !rate){missingRates.push(total.currency);continue;}
+    cents+=toCents(rate ? estimateExchange(total.amount,rate.rate) : total.amount);
+    converted++;
+  }
+  return {count:counted.length, twd:converted ? fromCents(cents) : null, missingRates};
 }
 
 export function needsBorderReview(item: CrossBorderItem) {

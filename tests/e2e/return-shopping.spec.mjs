@@ -51,3 +51,37 @@ test('several cross-border items link to one payment and survive plan changes an
   await expect(checklist.getByRole('heading',{name:'牛肉風味泡麵'})).toBeVisible();
   await expect(checklist.getByText('不攜帶 · 未連結支出')).toBeVisible();
 });
+
+test('return check sums shopping in TWD and turns an undecided item into a declaration reminder', async ({page}) => {
+  await page.goto('/');
+  await page.getByLabel('目的地').fill('東京');
+  await page.getByRole('button',{name:'建立旅程'}).click();
+  const expenses = page.getByRole('region',{name:'旅途記帳'});
+  await expenses.getByText('匯率估算（手動輸入）').click();
+  await expenses.getByLabel('原幣（三碼）').fill('JPY');
+  await expenses.getByLabel('目標幣（三碼）').fill('TWD');
+  await expenses.getByLabel('每 1 原幣的匯率').fill('0.21');
+  await expenses.getByLabel('匯率日期').fill('2026-11-25');
+  await expenses.getByLabel('匯率來源').fill('測試牌告');
+  await expenses.getByRole('button',{name:'儲存匯率'}).click();
+  for (const [title,amount] of [['藥妝店',150000],['和牛',20000]]) {
+    await expenses.getByRole('button',{name:'＋ 新增支出'}).click();
+    await expenses.getByLabel('支出名稱').fill(title);
+    await expenses.getByLabel('金額').fill(String(amount));
+    await expenses.getByLabel('幣別（三碼）').fill('JPY');
+    await expenses.getByLabel('分類').selectOption('shopping');
+    await expenses.getByRole('button',{name:'儲存支出'}).click();
+  }
+  await expenses.getByRole('button',{name:'加入跨境檢核'}).click();
+
+  await page.getByRole('button',{name:'旅遊記帳',exact:true}).click();
+  const check = page.getByRole('region',{name:'回台入境前檢查'});
+  await expect(check).toContainText('還沒決定要不要帶回（1）');
+  await expect(check).toContainText('約 NT$35,700');
+  await expect(check).toContainText('已超過申報門檻');
+  await check.getByRole('button',{name:'和牛：會帶回'}).click();
+  await expect(check).not.toContainText('還沒決定要不要帶回');
+  await expect(check.getByRole('heading',{name:/動植物產品須申報/})).toBeVisible();
+  await expect(check.getByRole('listitem').filter({hasText:'和牛'})).toBeVisible();
+  await expect(check.getByRole('link',{name:'臺灣海關旅客申報須知'})).toHaveAttribute('href',/customs\.gov\.tw/);
+});

@@ -111,7 +111,7 @@ function App() {
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6">
         <div className="animate-fade-in-up">
             <div hidden={activeTab !== Tab.GENERATOR}><GeneratorTab key={storageRevision} registerFlush={registerFlush} onStorageError={setStorageError} expenses={expenses} crossBorderItems={crossBorderItems} exchangeRates={exchangeRates} onShoppingChange={handleShoppingChange} onRatesChange={setExchangeRates} onCountryChange={setTripCountry} onNavigateToShopping={() => handleTabChange(Tab.SHOPPING)} /></div>
-            {activeTab === Tab.SHOPPING && <CrossBorderTab expenses={expenses} items={crossBorderItems} defaultDestination={tripCountry === 'JP' ? 'TW' : 'unknown'} onChange={setCrossBorderItems} />}
+            {activeTab === Tab.SHOPPING && <CrossBorderTab expenses={expenses} items={crossBorderItems} rates={exchangeRates}defaultDestination={tripCountry === 'JP' ? 'TW' : 'unknown'} onChange={setCrossBorderItems} />}
             {activeTab === Tab.REGULATIONS && <div className="secondary-screen"><RegulationsTab /></div>}
             {activeTab === Tab.ADMIN && adminEnabled && <AdminDashboardTab />}
         </div>

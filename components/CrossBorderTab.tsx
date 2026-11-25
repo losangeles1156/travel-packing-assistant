@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { carryIntentLabels, CROSS_BORDER_ITEM_LIMIT, crossBorderItemFromExpense, emptyReturnItem, isCrossBorderItem, needsBorderReview, type CrossBorderItem, type Expense } from '../domain/expenses';
+import { carryIntentLabels, CROSS_BORDER_ITEM_LIMIT, crossBorderItemFromExpense, emptyReturnItem, isCrossBorderItem, needsBorderReview, type CrossBorderItem, type ExchangeRate, type Expense } from '../domain/expenses';
 import { expenseReturnCategories, prohibitedReturnCategories } from '../domain/returnItems';
 import { ReturnItemFields, ReturnItemReview } from './ReturnItemReview';
+import ReturnCheck from './ReturnCheck';
 
 type RiskExpense = {
   expense: Expense;
@@ -9,9 +10,10 @@ type RiskExpense = {
   linked: boolean;
 };
 
-export default function CrossBorderTab({ expenses, items, defaultDestination, onChange }: {
+export default function CrossBorderTab({ expenses, items, rates, defaultDestination, onChange }: {
   expenses: Expense[];
   items: CrossBorderItem[];
+  rates: ExchangeRate[];
   defaultDestination: CrossBorderItem['destination'];
   onChange: (items: CrossBorderItem[]) => void;
 }) {
@@ -62,6 +64,11 @@ export default function CrossBorderTab({ expenses, items, defaultDestination, on
     if (draft?.id === item.id) editItem();
   }
 
+  function setIntent(item: CrossBorderItem, intent: CrossBorderItem['intent']) {
+    onChange(items.map(i => i.id === item.id ? { ...i, intent } : i));
+    setNotice(`已將「${item.title}」標記為${carryIntentLabels[intent]}。`);
+  }
+
   function newManualItem() {
     editItem({ ...emptyReturnItem(), destination: defaultDestination, title: '', id: '', intent: 'undecided' });
   }
@@ -72,6 +79,8 @@ export default function CrossBorderTab({ expenses, items, defaultDestination, on
       <div><strong>注意：消費紀錄中包含可能禁止攜帶入境的品項</strong>
       <p>新鮮水果、生鮮肉類等動植物產品嚴格禁止攜帶入境台灣。請確認購買的物品是否可攜帶過境，避免誤觸法規。</p></div>
     </div>}
+
+    <ReturnCheck expenses={expenses} items={items} rates={rates} onIntent={setIntent} />
 
     <section className="trip-documents" aria-label="消費紀錄風險偵測">
       <div className="trip-documents-heading"><div><h2>消費紀錄風險偵測</h2><p>根據旅途記帳自動偵測可能需要申報或禁止攜帶的物品。</p></div></div>

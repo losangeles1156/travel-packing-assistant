@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';
 const js=ts.transpileModule(fs.readFileSync(new URL('../domain/returnItems.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext}}).outputText;
-const {classifyReturnItems,expenseReturnCategories,prohibitedReturnCategories}=await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+const {classifyReturnItems,expenseReturnCategories,prohibitedReturnCategories,goodsDeclarationStatus,returnCheckGroups}=await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
 const input=value=>({value,source:'user',confirmedAt:'2026-11-07T00:00:00Z'});
 const cases=[['牛肉乾','animal'],['豬肉鬆','animal'],['雞蛋','animal'],['香腸','animal'],['火腿','animal'],['新鮮水果','plant'],['種子','plant'],['蔬菜','plant'],['盆栽','plant'],['鮮花','plant'],['處方藥','medicine'],['成藥','medicine'],['藥品','medicine'],['清酒','alcohol_tobacco'],['啤酒','alcohol_tobacco'],['香菸','alcohol_tobacco'],['雪茄','alcohol_tobacco'],['現金','currency'],['外幣','currency'],['黃金','currency'],['植物奶',null],['肉色襪子',null],['普通衣服',null],
   ['草莓一盒','plant'],['青森蘋果','plant'],['水蜜桃','plant'],['哈密瓜','plant'],['夕張メロン','plant'],['いちご','plant'],['シャインマスカット','plant'],['딸기','plant'],['귤 1kg','plant'],['北海道野菜','plant'],
@@ -12,3 +12,9 @@ test('缺少目的地與未確認輸入仍維持待查證',()=>{const r=classify
 const prohibited=expense=>expenseReturnCategories(expense).filter(x=>prohibitedReturnCategories.has(x.id)).map(x=>x.id);
 test('支出備註也會判斷禁止入境品項',()=>{assert.deepEqual(prohibited({title:'超市採買',note:'和牛 2 盒、いちご'}),['animal','plant']);assert.deepEqual(prohibited({title:'藥妝店',note:'目薬'}),[]);});
 test('備註不會被當成標題的加工品字尾',()=>assert.deepEqual(prohibited({title:'草莓',note:'大福店旁的攤位'}),['plant']));
+test('購物總額只有「逾」3萬5千元才算超過，八成起提醒接近',()=>{assert.equal(goodsDeclarationStatus('35000.00'),'near');assert.equal(goodsDeclarationStatus('35000.01'),'over');assert.equal(goodsDeclarationStatus('27999.99'),'below');assert.equal(goodsDeclarationStatus('28000.00'),'near');});
+test('回程檢查依處理方式與品名分組',()=>{
+ const item=(id,title,intent,category='unknown')=>({id,title,intent,category,ingredients:'',origin:'',quantity:'',destination:'TW'});
+ const groups=returnCheckGroups([item('1','牛肉風味泡麵','carry'),item('2','日本酒','carry'),item('3','點心','carry','plant'),item('4','草莓','local'),item('5','面膜','undecided'),item('6','毛巾','carry')]);
+ assert.deepEqual(groups.undecided.map(x=>x.id),['5']);assert.deepEqual(groups.quarantine.map(x=>x.id),['1','3']);assert.deepEqual(groups.alcoholTobacco.map(x=>x.id),['2']);
+});
