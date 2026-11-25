@@ -29,6 +29,7 @@ import { listRepository } from '../infrastructure/listRepository';
 import GuardianPanel from './GuardianPanel';
 import JourneyOverview from './JourneyOverview';
 import TripExpenses from './TripExpenses';
+import EmergencyCard from './EmergencyCard';
 import { migrateExpenseItems, needsBorderReview, type CrossBorderItem, type Expense, type ExchangeRate } from '../domain/expenses';
 import PackingItemIcon from './PackingItemIcon';
 import TripDocuments from './TripDocuments';
@@ -1264,6 +1265,7 @@ const GeneratorTab: React.FC<Props> = ({ registerFlush, onStorageError, expenses
           setDateNotice('已更新日期與時區；如曾匯出日曆，請自行更新外部日曆。');
         }}>更新日期與時區</button>{dateNotice && <p role="status" className="text-sm mt-2">{dateNotice}</p>}
       </details>
+      <div id="journey-emergency" tabIndex={-1}><EmergencyCard country={tripCountry} destination={destination} documents={documents} protection={travelProtection} onEdit={area => { const target = document.getElementById(`journey-${area}`); target?.scrollIntoView({behavior:'smooth',block:'start'}); target?.focus({preventScroll:true}); }} /></div>
       <div id="journey-documents" tabIndex={-1}><TripDocuments key={`documents-${activeListId ?? 'new'}`} documents={documents} onChange={(next,kind)=>{setDocuments(next);setGuardian(prev=>markDocumentChanges(prev,kind));}} /></div>
       <div id="journey-disruptions" tabIndex={-1}><TripDisruptions key={`disruptions-${activeListId ?? 'new'}`} documents={documents} disruptions={disruptions} transportPlans={transportPlans} protection={travelProtection} expenses={expenses} onNavigate={area => { const target = document.getElementById(`journey-${area}`); target?.scrollIntoView({behavior:'smooth',block:'start'}); target?.focus({preventScroll:true}); }} openRequest={disruptionOpenRequest} onChange={next=>{setDisruptions(next);setGuardian(prev=>markDocumentChanges(prev,'flight'));}} /></div>
       <div id="journey-transport" tabIndex={-1}><TransportPlans key={`transport-${activeListId ?? 'new'}`} documents={documents} plans={transportPlans} onChange={next=>{setTransportPlans(next);setGuardian(prev=>markDocumentChanges(prev,'flight'));}} /></div>

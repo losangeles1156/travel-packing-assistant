@@ -3,13 +3,15 @@ import type { ListSnapshot } from '../services/listStorageService';
 import type { TripDocument } from '../domain/tripDocuments';
 import type { TravelProtection } from '../domain/travelProtection';
 
-type Area = 'shopping' | 'packing' | 'documents' | 'disruptions' | 'transport' | 'protection' | 'checks' | 'expenses';
-type Situation = 'flight' | 'transport' | 'lodging' | 'network';
+type Area = 'shopping' | 'packing' | 'documents' | 'disruptions' | 'transport' | 'protection' | 'checks' | 'expenses' | 'emergency';
+type Situation = 'flight' | 'transport' | 'lodging' | 'network' | 'documents_lost' | 'medical';
 const situations: { id: Situation; label: string; icon: string; description: string; action: string; area: Area }[] = [
   { id: 'flight', label: '航班變動', icon: 'fa-plane', description: '記下已確認的延誤或取消，再檢視交通與其他安排。', action: '記錄航班變動', area: 'disruptions' },
   { id: 'transport', label: '交通中斷', icon: 'fa-train', description: '查看已記錄的機場交通與聯絡方式，自行確認替代安排。', action: '查看交通安排', area: 'transport' },
   { id: 'lodging', label: '住宿問題', icon: 'fa-bed', description: '先查看住宿地址與聯絡方式，再向住宿方確認。', action: '查看住宿資料', area: 'documents' },
   { id: 'network', label: '網路問題', icon: 'fa-wifi', description: '查看上網期限、延長方式與備用網路的紀錄。', action: '查看通訊準備', area: 'protection' },
+  { id: 'documents_lost', label: '證件遺失', icon: 'fa-passport', description: '護照遺失請先向當地警察報案並取得報案證明，再聯絡駐外館處補發；信用卡請向發卡銀行掛失，並聯絡保險公司確認理賠。', action: '查看駐外館處電話', area: 'emergency' },
+  { id: 'medical', label: '生病就醫', icon: 'fa-kit-medical', description: '向旅館或駐外館處詢問醫院資訊並儘速就醫，同時聯絡保險公司安排後續就醫與理賠。駐外館處無法代墊醫療費用。', action: '查看保險與館處電話', area: 'emergency' },
 ];
 
 export default function JourneyOverview({ documents, protection, weights, borderReviewCount, onNavigate }: { borderReviewCount:number; weights?:ListSnapshot['luggageWeights']; documents: TripDocument[]; protection?: TravelProtection; onNavigate: (area: Area) => void }) {
@@ -26,6 +28,7 @@ export default function JourneyOverview({ documents, protection, weights, border
   const stays = documents.filter(doc => doc.kind === 'lodging').length;
   return <section className="journey-dashboard" aria-label="旅程總覽">
     <div className="dashboard-heading"><div><p className="dashboard-kicker">YOUR JOURNEY</p><h2>旅程守護</h2><p>把重要安排與需要確認的事，放在容易找到的地方。</p></div><i className="fa-regular fa-compass" aria-hidden="true" /></div>
+    <button type="button" className="dashboard-emergency" onClick={() => onNavigate('emergency')}><i className="fa-solid fa-kit-medical" aria-hidden="true" /><span><strong>緊急資訊卡</strong><small>住宿地址、保險與駐外館處電話，離線也能看</small></span><span aria-hidden="true">›</span></button>
     <section className="dashboard-card dashboard-ready" aria-label="出發前待確認"><h3>出發前待確認</h3>
       {!flights && <button onClick={()=>onNavigate('documents')}>補上航班資料 →</button>}
       {!stays && <button onClick={()=>onNavigate('documents')}>確認住宿安排 →</button>}
