@@ -147,7 +147,7 @@ function App() {
              <div className={`text-xl mb-0.5 ${activeTab === Tab.SHOPPING ? 'transform -translate-y-1 transition-transform' : ''}`}>
                 <i className="fa-solid fa-bag-shopping" aria-hidden="true"></i>
             </div>
-            <span className="text-[10px] font-bold">跨境物品</span>
+            <span className="text-[10px] font-bold">旅遊記帳</span>
           </button>
 
           {adminEnabled && (
