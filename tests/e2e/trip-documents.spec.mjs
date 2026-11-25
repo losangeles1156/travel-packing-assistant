@@ -46,7 +46,7 @@ test('flight and lodging records require confirmation and survive backup restore
   await transport.getByLabel('關聯航班（選填）').selectOption({index:1});
   await transport.getByRole('button',{name:'確認交通安排'}).click();
   await changes.getByText('查看需要確認的事項').click();
-  await expect(changes.getByText(/測試機場接送/)).toBeVisible();
+  await expect(changes.getByText(/確認測試機場接送原安排.*聯絡方式：測試服務商/)).toBeVisible();
   const protection=page.getByRole('region',{name:'通訊與保險守護'});
   await protection.getByRole('button',{name:'編輯守護資料'}).click();
   await protection.getByLabel('裝置型號').fill('測試裝置');
@@ -75,7 +75,7 @@ test('flight and lodging records require confirmation and survive backup restore
   await backup.locator('summary').click();
   const [download]=await Promise.all([page.waitForEvent('download'),backup.getByRole('button',{name:'下載備份',exact:true}).click()]);
   const path=await download.path(); const raw=await fs.readFile(path,'utf8');
-  expect(JSON.parse(raw).version).toBe(10); expect(raw).not.toContain('SYNTHETIC_SECRET');
+  expect(JSON.parse(raw).version).toBe(11); expect(raw).not.toContain('SYNTHETIC_SECRET');
   page.once('dialog',dialog=>dialog.accept());
   await backup.getByRole('button',{name:'刪除全部本機資料'}).click();
   await expect(backup.getByText('清單與對應舊版副本已刪除',{exact:false})).toBeVisible();
