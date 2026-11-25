@@ -1,11 +1,11 @@
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { PackingItem, TripDetails, LuggageRule, ItemCategory, CustomRuleDef, RuleType, PreFlightTask } from '../types';
 import { DEFAULT_DATABASE, PRE_FLIGHT_TASKS, TRIP_TEMPLATES } from '../constants';
 import { RISK_RULESET_META, SUPPORTED_COUNTRIES, SUPPORTED_DIRECTIONS } from '../constants/riskKeywordRules.js';
 import ResultView from './ResultView';
 import { trackEvent } from '../services/analyticsService';
-import { formatDateLocal, getDefaultTripDates } from '../utils/date';
+import { getDefaultTripDates, addCalendarDays, inclusiveCalendarDays } from '../utils/date';
 import { buildCustomRuleById, getGeneratorRuleConfig } from '../utils/packingRules';
 import { apiUrl } from '../services/apiBase';
 import { analyzePackingRisks } from '../utils/riskEngine.js';
@@ -16,24 +16,50 @@ import { buildRiskGatePrompt, buildSecurityGateChecklist, evaluateNewItemRiskGat
 import { buildRiskGateReport, normalizeRiskMode } from '../utils/riskPolicy.js';
 import {
   createEmptyListSnapshot,
+  clearActiveListId,
   getActiveListId,
   ListIndexEntry,
   ListSnapshot,
-  loadListIndex,
-  loadListSnapshot,
-  saveListSnapshot,
   setActiveListId as persistActiveListId,
   touchTripDetailsKey,
 } from '../services/listStorageService';
 import { useCollabSession } from '../hooks/useCollabSession';
+import { CLOUD_FEATURES_ENABLED } from '../services/featureFlags';
+import { listRepository } from '../infrastructure/listRepository';
+import GuardianPanel from './GuardianPanel';
+import JourneyOverview from './JourneyOverview';
+import TripExpenses from './TripExpenses';
+import { migrateExpenseItems, needsBorderReview, type CrossBorderItem, type Expense, type ExchangeRate } from '../domain/expenses';
+import PackingItemIcon from './PackingItemIcon';
+import TripDocuments from './TripDocuments';
+import TripDisruptions from './TripDisruptions';
+import TransportPlans from './TransportPlans';
+import TravelProtectionPanel from './TravelProtection';
+import type { TripDocument } from '../domain/tripDocuments';
+import type { TripDisruption } from '../domain/tripDisruptions';
+import type { TransportPlan } from '../domain/transportPlan';
+import type { TravelProtection } from '../domain/travelProtection';
+import { emptyGuardian, initialRules, markChangedRules, markDocumentChanges, markScheduleChanges, type GuardianState } from '../domain/guardian';
+import { isValidTimeZone } from '../domain/timezone';
 
-const GeneratorTab: React.FC = () => {
+type Props = { registerFlush: (flush: (() => Promise<void>) | null) => void; onStorageError: (message: string) => void; expenses: Expense[]; crossBorderItems: CrossBorderItem[]; exchangeRates: ExchangeRate[]; onShoppingChange: (expenses: Expense[], items: CrossBorderItem[]) => void; onRatesChange: (rates: ExchangeRate[]) => void; onCountryChange: (country: string) => void; onNavigateToShopping?: () => void };
+const GeneratorTab: React.FC<Props> = ({ registerFlush, onStorageError, expenses, crossBorderItems, exchangeRates, onShoppingChange, onRatesChange, onCountryChange, onNavigateToShopping }) => {
   const [step, setStep] = useState<number>(0); // 0: Input, 1: Customize, 2: Result
+  const [journeySection, setJourneySection] = useState<'overview' | 'packing'>('overview');
+  const [disruptionOpenRequest, setDisruptionOpenRequest] = useState(0);
+  const [startError, setStartError] = useState<{field:'destination'|'start'|'end'; message:string} | null>(null);
+  const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
+  const tripSettingsRef = useRef<HTMLDetailsElement>(null);
 
   const [listIndex, setListIndex] = useState<ListIndexEntry[]>([]);
   const [activeListId, setActiveListId] = useState<string | null>(null);
   const hydrateDoneRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
+  const revisionRef = useRef(0);
+  const dirtyRef = useRef(false);
+  const saveInFlightRef = useRef<Promise<void> | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved');
   const lastStepTrackedRef = useRef<number | null>(null);
   const lastBlockingCountRef = useRef<number | null>(null);
   const noResultSearchRef = useRef<string>('');
@@ -41,10 +67,16 @@ const GeneratorTab: React.FC = () => {
 
   // Step 0 Form State
   const [destination, setDestination] = useState('');
-  const [tripCountry, setTripCountry] = useState<'JP' | 'KR' | 'SG' | 'VN' | 'TH'>('JP');
+  const [tripCountry, setTripCountryRaw] = useState<'JP' | 'KR' | 'SG' | 'VN' | 'TH'>('JP');
+  const setTripCountry = useCallback((country: 'JP' | 'KR' | 'SG' | 'VN' | 'TH') => { setTripCountryRaw(country); onCountryChange(country); }, [onCountryChange]);
   const [tripDirection, setTripDirection] = useState<'OUTBOUND' | 'INBOUND'>('OUTBOUND');
 
   const [dates, setDates] = useState(() => getDefaultTripDates());
+  const [dateDraft, setDateDraft] = useState(() => getDefaultTripDates());
+  const [dateNotice, setDateNotice] = useState('');
+  const [departureTimezone, setDepartureTimezone] = useState('');
+  const [returnTimezone, setReturnTimezone] = useState('');
+  const [timezoneDraft, setTimezoneDraft] = useState({departure:'',return:''});
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
@@ -58,23 +90,15 @@ const GeneratorTab: React.FC = () => {
 
   const setDurationDays = (days: number) => {
     if (!dates.start) return;
-    const start = new Date(dates.start);
-    if (!Number.isFinite(start.getTime())) return;
-    const end = new Date(start);
-    end.setDate(end.getDate() + Math.max(0, days - 1));
-    setDates(prev => ({ ...prev, end: formatDateLocal(end) }));
+    const end = addCalendarDays(dates.start, Math.max(0, days - 1));
+    if (!end) return;
+    setDates(prev => ({ ...prev, end }));
     trackEvent('quick_duration_set', { days });
   };
 
   // Derived Duration
   const duration = useMemo(() => {
-    if (!dates.start || !dates.end) return 0;
-    const start = new Date(dates.start);
-    const end = new Date(dates.end);
-    const diffTime = end.getTime() - start.getTime();
-    // Difference in days + 1 (inclusive)
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    return diffDays > 0 ? diffDays : 0;
+    return inclusiveCalendarDays(dates.start, dates.end);
   }, [dates]);
 
   // Trip Data for Result
@@ -87,6 +111,12 @@ const GeneratorTab: React.FC = () => {
   });
 
   const [items, setItems] = useState<PackingItem[]>([]);
+  const [guardian, setGuardian] = useState<GuardianState>(emptyGuardian);
+  const [documents, setDocuments] = useState<TripDocument[]>([]);
+  const [disruptions, setDisruptions] = useState<TripDisruption[]>([]);
+  const [transportPlans, setTransportPlans] = useState<TransportPlan[]>([]);
+  const [travelProtection, setTravelProtection] = useState<TravelProtection|undefined>(undefined);
+  const [luggageWeights, setLuggageWeights] = useState<ListSnapshot['luggageWeights']>(undefined);
 
   // LIFTED STATE: Progress tracking (Tasks & Packing)
   // This ensures state is preserved when user hits "Back" from ResultView
@@ -142,18 +172,29 @@ const GeneratorTab: React.FC = () => {
     { class: 'bg-indigo-50 text-indigo-600 border-indigo-200', label: '深藍' },
   ];
 
-  const handleStart = () => {
-    if (!destination || !dates.start || !dates.end) {
-      alert("請填寫完整的旅行資訊");
+  const handleStart = async () => {
+    if (creatingRef.current) return;
+    if (!destination.trim()) {
+      setStartError({field:'destination',message:'請先輸入目的地。'});
+      document.getElementById('trip-destination')?.focus();
       return;
     }
-    if (duration <= 0) {
-      alert("回程日期必須晚於或等於去程日期");
+    if (!dates.start) {
+      setStartError({field:'start',message:'請先選擇出發日期。'});
+      document.getElementById('trip-start')?.focus();
       return;
     }
+    if (!dates.end || duration <= 0) {
+      setStartError({field:'end',message:!dates.end ? '請先選擇回程日期。' : '回程日期不能早於出發日期。'});
+      document.getElementById('trip-end')?.focus();
+      return;
+    }
+    setStartError(null);
+    creatingRef.current = true;
+    setCreating(true);
 
     const trip = {
-      destination,
+      destination: destination.trim(),
       startDate: dates.start,
       endDate: dates.end,
       duration,
@@ -178,14 +219,12 @@ const GeneratorTab: React.FC = () => {
       direction: tripDirection,
     });
 
-    touchTripDetailsKey(trip);
-
     // Initialize list based on days if items empty (first run), or preserve existing selection if just updating details?
     // For simplicity, if items are empty, load default. If user goes back to input, we probably want to keep their items.
     const baseItems: PackingItem[] = DEFAULT_DATABASE.map(item => ({
       ...item,
       quantity: item.isDaily ? duration : 1,
-      checked: true,
+      checked: item.id !== 'e8' && item.id !== 'e10',
     }));
 
     const selectedTemplate = TRIP_TEMPLATES.find(t => t.id === selectedTemplateId) || null;
@@ -201,6 +240,14 @@ const GeneratorTab: React.FC = () => {
     const nextTasks = selectedTemplate ? [...PRE_FLIGHT_TASKS, ...selectedTemplate.addTasks] : PRE_FLIGHT_TASKS;
 
     setItems(nextItems);
+    setGuardian(emptyGuardian());
+    setDocuments([]);
+    setDisruptions([]);
+    setTransportPlans([]);
+    setTravelProtection(undefined);
+    onShoppingChange([],[]);
+    onRatesChange([]);
+    setLuggageWeights(undefined);
     setTasks(nextTasks);
     setPackedItemIds(new Set());
     setCustomRuleDefs([]);
@@ -215,6 +262,7 @@ const GeneratorTab: React.FC = () => {
       });
     }
 
+    setDateDraft({start: dates.start, end: dates.end});
     const snapshot = createEmptyListSnapshot({
       destination: trip.destination,
       startDate: trip.startDate,
@@ -225,22 +273,44 @@ const GeneratorTab: React.FC = () => {
       items: nextItems,
       tasks: nextTasks,
     });
-    saveListSnapshot(snapshot);
-    persistActiveListId(snapshot.id);
-    setActiveListId(snapshot.id);
-    setListIndex(loadListIndex());
-    setStep(1);
+    try {
+      touchTripDetailsKey(trip);
+      await listRepository.save(snapshot);
+      persistActiveListId(snapshot.id);
+      setActiveListId(snapshot.id);
+      setListIndex(toIndex(await listRepository.getAll()));
+      setStep(1);
+      setDestination(trip.destination);
+      setJourneySection('overview');
+      window.scrollTo({ top: 0 });
+      onStorageError('');
+    } catch { onStorageError('清單無法儲存，請檢查瀏覽器儲存空間。資料尚未保存，請勿關閉頁面。'); }
+    finally { creatingRef.current = false; setCreating(false); }
   };
 
-  const resetToNewTrip = () => {
+  const resetToNewTrip = async () => {
+    try { await flushCurrent(); clearActiveListId(); } catch { onStorageError('無法切換旅程，請檢查瀏覽器儲存狀態。'); return; }
     setActiveListId(null);
     setStep(0);
+    setJourneySection('overview');
     setDestination('');
     setTripCountry('JP');
     setTripDirection('OUTBOUND');
-    setDates(getDefaultTripDates());
+    const nextDates = getDefaultTripDates();
+    setDates(nextDates);
+    setDateDraft(nextDates);
+    setDateNotice('');
+    setDepartureTimezone(''); setReturnTimezone(''); setTimezoneDraft({departure:'',return:''});
     setFinalTripDetails({ destination: '', startDate: '', duration: 0, country: 'JP', direction: 'OUTBOUND' });
     setItems([]);
+    setGuardian(emptyGuardian());
+    setDocuments([]);
+    setDisruptions([]);
+    setTransportPlans([]);
+    setTravelProtection(undefined);
+    onShoppingChange([],[]);
+    onRatesChange([]);
+    setLuggageWeights(undefined);
     setTasks(PRE_FLIGHT_TASKS);
     setPackedItemIds(new Set());
     setActiveCategory('ALL');
@@ -263,6 +333,11 @@ const GeneratorTab: React.FC = () => {
     setTripCountry(snapshot.trip.country || 'JP');
     setTripDirection(snapshot.trip.direction || 'OUTBOUND');
     setDates({ start: snapshot.trip.startDate, end: snapshot.trip.endDate });
+    setDateDraft({ start: snapshot.trip.startDate, end: snapshot.trip.endDate });
+    setDateNotice('');
+    setDepartureTimezone(snapshot.trip.departureTimezone ?? '');
+    setReturnTimezone(snapshot.trip.returnTimezone ?? '');
+    setTimezoneDraft({departure:snapshot.trip.departureTimezone ?? '', return:snapshot.trip.returnTimezone ?? ''});
     setFinalTripDetails({
       destination: snapshot.trip.destination,
       startDate: snapshot.trip.startDate,
@@ -271,6 +346,16 @@ const GeneratorTab: React.FC = () => {
       direction: snapshot.trip.direction || 'OUTBOUND',
     });
     setItems(snapshot.items);
+    setGuardian(markChangedRules(snapshot.guardian ?? emptyGuardian(), initialRules));
+    setDocuments(snapshot.documents ?? []);
+    setDisruptions(snapshot.disruptions ?? []);
+    setTransportPlans(snapshot.transportPlans ?? []);
+    setTravelProtection(snapshot.travelProtection);
+    const migrated = migrateExpenseItems(snapshot.expenses ?? [],snapshot.crossBorderItems);
+    onShoppingChange(migrated.expenses, migrated.items);
+    onRatesChange(snapshot.exchangeRates ?? []);
+    onCountryChange(snapshot.trip.country || 'JP');
+    setLuggageWeights(snapshot.luggageWeights);
     setTasks(snapshot.tasks);
     setPackedItemIds(new Set(snapshot.packedItemIds));
     setCustomRuleDefs(snapshot.customRules);
@@ -297,23 +382,79 @@ const GeneratorTab: React.FC = () => {
         duration,
         country: tripCountry,
         direction: tripDirection,
+        departureTimezone,
+        returnTimezone,
       },
       items,
       tasks,
       packedItemIds: Array.from(packedItemIds),
       customRules: customRuleDefs,
+      guardian,
+      documents,
+      disruptions,
+      transportPlans,
+      expenses,
+      crossBorderItems,
+      exchangeRates,
+      ...(travelProtection ? {travelProtection} : {}),
+      ...(luggageWeights ? {luggageWeights} : {}),
     };
   };
 
-  const handleOpenRecentList = (id: string) => {
-    const snapshot = loadListSnapshot(id);
-    if (!snapshot) return;
-    persistActiveListId(id);
-    applySnapshot(snapshot);
-    setListIndex(loadListIndex());
+  const toIndex = (lists: ListSnapshot[]): ListIndexEntry[] => lists
+    .map(({ id, updatedAt, trip }) => ({ id, updatedAt, ...trip }))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+  const latestSnapshot = useRef<ListSnapshot | null>(null);
+  latestSnapshot.current = activeListId ? buildSnapshot(activeListId, new Date().toISOString()) : null;
+  const flushCurrent = async () => {
+    if (saveTimerRef.current !== null) { window.clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+    if (saveInFlightRef.current) return saveInFlightRef.current;
+    if (!hydrateDoneRef.current || !latestSnapshot.current || !dirtyRef.current) return;
+    const pending = (async () => {
+      try {
+        while (dirtyRef.current && latestSnapshot.current) {
+          const revision = revisionRef.current;
+          const snapshot = latestSnapshot.current;
+          await listRepository.save(snapshot);
+          if (revisionRef.current === revision) dirtyRef.current = false;
+        }
+        setSaveStatus('saved');
+        onStorageError('');
+      } catch (error) {
+        setSaveStatus('error');
+        onStorageError('清單儲存失敗，請檢查瀏覽器儲存空間。請保留此頁並重試。');
+        throw error;
+      }
+    })();
+    saveInFlightRef.current = pending;
+    try { await pending; } finally { if (saveInFlightRef.current === pending) saveInFlightRef.current = null; }
+  };
+  const flushRef = useRef(flushCurrent);
+  flushRef.current = flushCurrent;
+  useEffect(() => { registerFlush(() => flushRef.current()); return () => registerFlush(null); }, [registerFlush]);
+  useEffect(() => {
+    const beforeUnload = (event: BeforeUnloadEvent) => { if (dirtyRef.current) { event.preventDefault(); event.returnValue = ''; } };
+    const onVisibility = () => { if (document.visibilityState === 'hidden' && dirtyRef.current) void flushRef.current().catch(() => undefined); };
+    window.addEventListener('beforeunload', beforeUnload);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { window.removeEventListener('beforeunload', beforeUnload); document.removeEventListener('visibilitychange', onVisibility); };
+  }, []);
+
+
+  const handleOpenRecentList = async (id: string) => {
+    try {
+      await flushCurrent();
+      const snapshot = await listRepository.get(id);
+      if (!snapshot) throw new Error('清單不存在');
+      persistActiveListId(id);
+      applySnapshot(snapshot);
+      setListIndex(toIndex(await listRepository.getAll()));
+    } catch { onStorageError('無法開啟清單，請確認本機資料是否可用。'); }
   };
 
   const handleShare = async (): Promise<{ url: string | null; reason?: string; status?: number }> => {
+    if (!CLOUD_FEATURES_ENABLED) return { url: null, reason: 'unavailable' };
     if (!activeListId) return { url: null, reason: 'no_active_list' };
     if (typeof window === 'undefined') return { url: null, reason: 'no_window' };
 
@@ -339,109 +480,38 @@ const GeneratorTab: React.FC = () => {
   };
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
     let cancelled = false;
-    const run = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const shareId = params.get('share');
-      if (shareId) {
-        try {
-          const res = await fetch(apiUrl(`/share/${encodeURIComponent(shareId)}`));
-          if (!res.ok) throw new Error('not ok');
-          const data = await res.json();
-          const snapshot = data?.snapshot as ListSnapshot | undefined;
-          if (!snapshot || snapshot.schemaVersion !== 1 || typeof snapshot.id !== 'string') {
-            throw new Error('bad snapshot');
-          }
-          if (cancelled) return;
-
-          saveListSnapshot(snapshot);
+    (async () => {
+      try {
+        const lists = await listRepository.getAll();
+        if (cancelled) return;
+        const index = toIndex(lists);
+        setListIndex(index);
+        const preferred = getActiveListId();
+        const snapshot = lists.find(x => x.id === preferred) ?? lists.find(x => x.id === index[0]?.id);
+        if (snapshot) {
+          // A restored or fallback list must also become the active list for calendar export.
           persistActiveListId(snapshot.id);
           applySnapshot(snapshot);
-          setListIndex(loadListIndex());
-          hydrateDoneRef.current = true;
-
-          params.delete('share');
-          const nextSearch = params.toString();
-          const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`;
-          window.history.replaceState({}, '', nextUrl);
-
-          trackEvent('share_loaded', { shareId });
-          return;
-        } catch {
-          trackEvent('share_load_failed', { shareId });
-          alert('分享連結無效或已失效');
         }
-      }
-
-      const index = loadListIndex();
-      if (cancelled) return;
-      setListIndex(index);
-
-      const preferredId = getActiveListId();
-      const fallbackId = index[0]?.id ?? null;
-      const idToLoad = preferredId ?? fallbackId;
-      if (!idToLoad) {
         hydrateDoneRef.current = true;
-        return;
-      }
-
-      const snapshot = loadListSnapshot(idToLoad);
-      if (!snapshot) {
-        hydrateDoneRef.current = true;
-        return;
-      }
-
-      applySnapshot(snapshot);
-      hydrateDoneRef.current = true;
-    };
-
-    run();
-    return () => {
-      cancelled = true;
-    };
+      } catch { if (!cancelled) onStorageError('無法讀取本機清單，請保留備份並重新開啟。'); }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    if (!hydrateDoneRef.current) return;
-    if (!activeListId) return;
-    if (typeof window === 'undefined') return;
-
-    if (saveTimerRef.current) {
-      window.clearTimeout(saveTimerRef.current);
-    }
-
+  useLayoutEffect(() => {
+    if (!hydrateDoneRef.current || !activeListId) return;
+    revisionRef.current += 1;
+    dirtyRef.current = true;
+    setSaveStatus('saving');
+    if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => {
-      const updatedAt = new Date().toISOString();
-      const snapshot = buildSnapshot(activeListId, updatedAt);
-      saveListSnapshot(snapshot);
-      setListIndex(loadListIndex());
-      touchTripDetailsKey(snapshot.trip);
+      saveTimerRef.current = null;
+      void flushRef.current().then(async () => setListIndex(toIndex(await listRepository.getAll()))).catch(() => undefined);
     }, 500);
-
-    return () => {
-      if (saveTimerRef.current) {
-        window.clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = null;
-      }
-    };
-  }, [
-    activeListId,
-    activeCategory,
-    customRuleDefs,
-    dates.end,
-    dates.start,
-    destination,
-    tripCountry,
-    tripDirection,
-    duration,
-    items,
-    packedItemIds,
-    sortBy,
-    step,
-    step,
-    tasks,
-  ]);
+    return () => { if (saveTimerRef.current !== null) { window.clearTimeout(saveTimerRef.current); saveTimerRef.current = null; } };
+  }, [activeListId, activeCategory, customRuleDefs, dates.end, dates.start, destination, tripCountry, tripDirection, duration, items, packedItemIds, sortBy, step, tasks, guardian, documents, disruptions, transportPlans, travelProtection, expenses, crossBorderItems, exchangeRates, luggageWeights, departureTimezone, returnTimezone]);
 
   const currentSnapshotForCollab = useMemo(() => {
     if (!activeListId) return null;
@@ -492,6 +562,14 @@ const GeneratorTab: React.FC = () => {
     setItems(prev => prev.map(item =>
       item.id === id ? { ...item, checked: !item.checked } : item
     ));
+  };
+
+  const handleRemoveItem = (id: string, name: string) => {
+    if (!window.confirm(`確定從這趟旅程刪除「${name}」？`)) return;
+    setLastBulkResolveSnapshot(null);
+    setLastBulkResolveCount(0);
+    setItems(prev => prev.filter(item => item.id !== id));
+    setPackedItemIds(prev => { const next = new Set(prev); next.delete(id); return next; });
   };
 
   const resolveRiskIssue = (issue: {
@@ -900,7 +978,7 @@ const GeneratorTab: React.FC = () => {
   // Step 0: Input Form (Rich UI)
   if (step === 0) {
     return (
-      <div className="max-w-lg mx-auto mt-8">
+      <div className="new-trip max-w-lg mx-auto">
         {listIndex.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 mb-6 overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
@@ -913,7 +991,7 @@ const GeneratorTab: React.FC = () => {
               </button>
             </div>
             <div className="divide-y divide-slate-100">
-              {listIndex.slice(0, 3).map(entry => (
+              {listIndex.map(entry => (
                 <button
                   key={entry.id}
                   onClick={() => handleOpenRecentList(entry.id)}
@@ -937,29 +1015,23 @@ const GeneratorTab: React.FC = () => {
           </div>
         )}
 
-        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
+        <div className="new-trip-card overflow-hidden">
 
           {/* Hero Header */}
-          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 text-white text-center relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-              <i className="fa-solid fa-earth-asia text-9xl absolute -top-4 -left-4"></i>
-              <i className="fa-solid fa-plane text-8xl absolute bottom-4 right-4 transform rotate-[-20deg]"></i>
-            </div>
-
-            <div className="relative z-10">
-              <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner border border-white/30">
-                <i className="fa-solid fa-suitcase-rolling text-3xl"></i>
-              </div>
-              <h2 className="text-2xl font-bold tracking-tight">準備好出發了嗎？</h2>
-              <p className="text-blue-100 mt-2 text-sm font-light">輸入目的地與日期，立即生成您的專屬清單</p>
-            </div>
+          <div className="new-trip-hero relative overflow-hidden">
+            <img className="new-trip-illustration" src="/travel-landscape.svg" alt="" aria-hidden="true" />
+            <div className="new-trip-stamp" aria-hidden="true"><i className="fa-solid fa-plane"></i></div>
+            <p className="eyebrow">出發前的準備</p>
+            <h2>下一趟旅行，<br />慢慢準備。</h2>
+            <p className="new-trip-intro">把行李、出發前的準備和旅途中的重要事項，放在同一個地方。</p>
+            <div className="hero-route" aria-hidden="true"><span>出發</span><i></i><i className="fa-solid fa-location-dot"></i><span>抵達</span></div>
           </div>
 
           {/* Form Body */}
-          <div className="p-8 space-y-8">
-            <div className="space-y-3">
+          <div className="new-trip-form">
+            <details className="trip-template trip-option"><summary>旅程類型 <span>{TRIP_TEMPLATES.find(t => t.id === selectedTemplateId)?.name || '可選擇'}</span></summary><div className="space-y-3 mt-3">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">旅程模板 Templates</label>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">旅程類型</label>
                 {selectedTemplateId && (
                   <button
                     onClick={() => handleTemplatePick(selectedTemplateId)}
@@ -991,13 +1063,14 @@ const GeneratorTab: React.FC = () => {
                   );
                 })}
               </div>
-            </div>
+            </div></details>
 
             {/* Destination Input */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">適用規則 Scope</label>
+            <details className="trip-scope trip-option"><summary>參考地區與方向 <span>{SUPPORTED_COUNTRIES.find(c => c.code === tripCountry)?.name}・{SUPPORTED_DIRECTIONS.find(d => d.code === tripDirection)?.name}</span></summary><div className="space-y-2 mt-3">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">旅程方向與參考地區</label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <select
+                  aria-label="適用規則國家"
                   value={tripCountry}
                   onChange={(e) => setTripCountry(e.target.value as 'JP' | 'KR' | 'SG' | 'VN' | 'TH')}
                   className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl py-3 px-4 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition-all"
@@ -1007,6 +1080,7 @@ const GeneratorTab: React.FC = () => {
                   ))}
                 </select>
                 <select
+                  aria-label="旅程方向"
                   value={tripDirection}
                   onChange={(e) => setTripDirection(e.target.value as 'OUTBOUND' | 'INBOUND')}
                   className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl py-3 px-4 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition-all"
@@ -1016,28 +1090,32 @@ const GeneratorTab: React.FC = () => {
                   ))}
                 </select>
               </div>
-            </div>
+            </div></details>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">目的地 Destination</label>
+            <div className="trip-destination space-y-2">
+              <label htmlFor="trip-destination" className="text-xs font-bold text-slate-400 uppercase tracking-wider">目的地</label>
               <div className="relative group">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors">
                   <i className="fa-solid fa-location-dot text-lg"></i>
                 </div>
                 <input
+                  id="trip-destination"
                   type="text"
                   className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl py-4 pl-12 pr-4 text-lg font-medium text-slate-800 placeholder-slate-400 outline-none focus:border-blue-500 focus:bg-white transition-all"
                   placeholder="例如：東京, 日本"
                   value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
+                  aria-invalid={startError?.field === 'destination'}
+                  aria-describedby={startError?.field === 'destination' ? 'destination-error' : undefined}
+                  onChange={(e) => { setDestination(e.target.value); if (startError?.field === 'destination') setStartError(null); }}
                 />
               </div>
+              {startError?.field === 'destination' && <p id="destination-error" role="alert" className="form-error">{startError.message}</p>}
             </div>
 
             {/* Date Range Input */}
-            <div className="space-y-2">
+            <div className="trip-dates space-y-2">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex justify-between items-center">
-                <span>日期 Dates</span>
+                <span>旅行日期</span>
                 {duration > 0 && (
                   <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-bold">
                     共 {duration} 天
@@ -1048,25 +1126,33 @@ const GeneratorTab: React.FC = () => {
               <div className="flex flex-col sm:flex-row border-2 border-slate-100 rounded-xl overflow-hidden bg-slate-50">
                 {/* Start Date */}
                 <div className="flex-1 relative border-b sm:border-b-0 sm:border-r border-slate-200 p-3 hover:bg-white transition-colors focus-within:bg-white group">
-                  <label className="block text-[10px] font-bold text-slate-400 mb-1 group-focus-within:text-blue-500">去程 CHECK-IN</label>
+                  <label htmlFor="trip-start" className="block text-[10px] font-bold text-slate-400 mb-1 group-focus-within:text-blue-500">出發日期</label>
                   <input
+                    id="trip-start"
                     type="date"
                     className="w-full bg-transparent outline-none text-slate-800 font-semibold font-mono"
                     value={dates.start}
-                    onChange={(e) => setDates(p => ({ ...p, start: e.target.value }))}
+                    aria-invalid={startError?.field === 'start'}
+                    aria-describedby={startError?.field === 'start' ? 'start-error' : undefined}
+                    onChange={(e) => { setDates(p => ({ ...p, start: e.target.value })); if (startError?.field === 'start') setStartError(null); }}
                   />
+                  {startError?.field === 'start' && <p id="start-error" role="alert" className="form-error">{startError.message}</p>}
                 </div>
 
                 {/* End Date */}
                 <div className="flex-1 relative p-3 hover:bg-white transition-colors focus-within:bg-white group">
-                  <label className="block text-[10px] font-bold text-slate-400 mb-1 group-focus-within:text-blue-500">回程 CHECK-OUT</label>
+                  <label htmlFor="trip-end" className="block text-[10px] font-bold text-slate-400 mb-1 group-focus-within:text-blue-500">回程日期</label>
                   <input
+                    id="trip-end"
                     type="date"
                     className="w-full bg-transparent outline-none text-slate-800 font-semibold font-mono"
                     min={dates.start}
                     value={dates.end}
-                    onChange={(e) => setDates(p => ({ ...p, end: e.target.value }))}
+                    aria-invalid={startError?.field === 'end'}
+                    aria-describedby={startError?.field === 'end' ? 'end-error' : undefined}
+                    onChange={(e) => { setDates(p => ({ ...p, end: e.target.value })); if (startError?.field === 'end') setStartError(null); }}
                   />
+                  {startError?.field === 'end' && <p id="end-error" role="alert" className="form-error">{startError.message}</p>}
                 </div>
               </div>
 
@@ -1084,20 +1170,23 @@ const GeneratorTab: React.FC = () => {
             </div>
 
             {/* Generate Button */}
+            <p className="trip-scope-notice">清單參考：{SUPPORTED_COUNTRIES.find(c => c.code === tripCountry)?.name}・{SUPPORTED_DIRECTIONS.find(d => d.code === tripDirection)?.name}。與行程不符時請先調整；其他地區請查詢官方規定。</p>
             <button
               onClick={handleStart}
-              className="w-full group relative overflow-hidden bg-slate-900 text-white rounded-xl py-4 font-bold text-lg shadow-lg shadow-slate-200 hover:shadow-slate-300 hover:-translate-y-0.5 transition-all active:translate-y-0 active:shadow-sm"
+              disabled={creating}
+              aria-busy={creating}
+              className="trip-start-button w-full group relative overflow-hidden rounded-xl py-4 font-bold text-lg transition-all"
             >
               <span className="relative z-10 flex items-center justify-center gap-2">
-                建立行李清單 <i className="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                {creating ? '正在建立旅程…' : '建立旅程'} <i className="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform" aria-hidden="true"></i>
               </span>
               <div className="absolute inset-0 bg-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             </button>
           </div>
         </div>
 
-        <div className="text-center mt-6 text-slate-400 text-sm">
-          <i className="fa-solid fa-shield-cat mr-1"></i> 智慧分類 • 自動建議 • 風險提醒
+        <div className="text-center mt-6 text-slate-500 text-sm">
+          <i className="fa-solid fa-lock mr-1"></i> 旅程資料保存在這個瀏覽器
         </div>
       </div>
     );
@@ -1109,7 +1198,12 @@ const GeneratorTab: React.FC = () => {
       <ResultView
         items={selectedItems}
         tripDetails={finalTripDetails}
-        onBack={() => setStep(1)}
+        onBack={() => { setJourneySection('packing'); setStep(1); }}
+        onGuardian={() => { setJourneySection('overview'); setStep(1); window.scrollTo({top:0}); }}
+        onItemChange={(id, update) => setItems(prev=>prev.map(item=>item.id===id?{...item,...update}:item))}
+        luggageWeights={luggageWeights}
+        onWeightChange={setLuggageWeights}
+        saveStatus={saveStatus}
         onNewTrip={resetToNewTrip}
         onShare={handleShare}
         customRules={customRuleDefs}
@@ -1125,10 +1219,71 @@ const GeneratorTab: React.FC = () => {
   }
 
   // Step 1: Customize List
+  const flights = documents.filter(doc => doc.kind === 'flight');
+  const stays = documents.filter(doc => doc.kind === 'lodging');
+  const onlyFlight = flights.length === 1 ? flights[0] : undefined;
+
   return (
-    <div className="max-w-4xl mx-auto pb-36 md:pb-24">
+    <div className="journey-workspace max-w-4xl mx-auto pb-36 md:pb-24">
+      <div className="journey-ticket">
+        <div className="journey-ticket-top"><span>我的旅程</span><span><i className="fa-solid fa-plane" aria-hidden="true"></i> {duration} 天</span></div>
+        <h2>{destination || '我的旅程'}</h2>
+        <p>{dates.start || '日期待定'} <span aria-hidden="true">→</span> {dates.end || '日期待定'}</p>
+        <div className="journey-ticket-bottom"><span>出發前的準備，都在這裡。</span><i className="fa-regular fa-sun" aria-hidden="true"></i></div>
+      </div>
+      <div className="journey-nav" aria-label="旅程準備內容">
+        <button type="button" aria-pressed={journeySection === 'overview'} onClick={() => setJourneySection('overview')}><i className="fa-regular fa-compass" aria-hidden="true"></i> 旅程守護</button>
+        <button type="button" aria-pressed={journeySection === 'packing'} onClick={() => setJourneySection('packing')}><i className="fa-solid fa-suitcase-rolling" aria-hidden="true"></i> 行李清單 <span>{selectedItems.length}</span></button>
+      </div>
+      <div className="journey-meta"><p role="status" aria-live="polite" className="save-indicator">{saveStatus === 'saving' ? '正在儲存至本機…' : saveStatus === 'error' ? '本機儲存失敗，請保留此頁。' : '已儲存至本機'}</p><button type="button" onClick={() => void resetToNewTrip()}>切換／新增旅程</button></div>
+      <div hidden={journeySection !== 'overview'}>
+      <JourneyOverview borderReviewCount={crossBorderItems.filter(needsBorderReview).length} weights={luggageWeights} documents={documents} protection={travelProtection} onNavigate={area => {
+        if (area === 'shopping') { onNavigateToShopping?.(); return; }
+        if (area === 'packing') { setJourneySection('packing'); handleFinish(); window.scrollTo({top:0}); return; }
+        if (area === 'disruptions') setDisruptionOpenRequest(value => value + 1);
+        const target = document.getElementById(`journey-${area}`);
+        target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        target?.focus({ preventScroll: true });
+      }} />
+      <details ref={tripSettingsRef} className="trip-settings mb-6"><summary className="cursor-pointer font-bold">變更旅程日期與時區</summary>
+        <p className="text-sm mt-2">按「更新日期與時區」後才會儲存，相關檢查會標記待複核；行李數量不自動調整，已匯出的日曆也不會自動更新。</p>
+        <div className="flex flex-wrap gap-3 mt-2"><label>出發日期<input className="block border rounded p-2" type="date" value={dateDraft.start} onChange={e=>setDateDraft({...dateDraft,start:e.target.value})} /></label><label>回程日期<input className="block border rounded p-2" type="date" value={dateDraft.end} onChange={e=>setDateDraft({...dateDraft,end:e.target.value})} /></label></div>
+        <div className="flex flex-wrap gap-3 mt-2">{(['departure','return'] as const).map(key => <div key={key} className="timezone-field"><label>{key === 'departure' ? '出發地常用時區' : '回程地常用時區'}<select className="block border rounded p-2 w-full" value={['Asia/Taipei','Asia/Tokyo','Asia/Seoul','Asia/Singapore','Asia/Bangkok','Asia/Ho_Chi_Minh'].includes(timezoneDraft[key]) ? timezoneDraft[key] : ''} onChange={e=>setTimezoneDraft({...timezoneDraft,[key]:e.target.value})}><option value="">請選擇或自行輸入</option><option value="Asia/Taipei">臺灣（Asia/Taipei）</option><option value="Asia/Tokyo">日本（Asia/Tokyo）</option><option value="Asia/Seoul">韓國（Asia/Seoul）</option><option value="Asia/Singapore">新加坡（Asia/Singapore）</option><option value="Asia/Bangkok">泰國（Asia/Bangkok）</option><option value="Asia/Ho_Chi_Minh">越南（Asia/Ho_Chi_Minh）</option></select></label><details className="custom-timezone"><summary>自行輸入其他時區{timezoneDraft[key] && !['Asia/Taipei','Asia/Tokyo','Asia/Seoul','Asia/Singapore','Asia/Bangkok','Asia/Ho_Chi_Minh'].includes(timezoneDraft[key]) ? `（目前：${timezoneDraft[key]}）` : ''}</summary><label>{key === 'departure' ? '出發地時區（例如 Asia/Taipei）' : '回程地時區（例如 Asia/Tokyo）'}<input className="block border rounded p-2 w-full" value={timezoneDraft[key]} onChange={e=>setTimezoneDraft({...timezoneDraft,[key]:e.target.value})} /></label></details></div>)}</div>
+        <p className="text-sm">時區未知可留白，日曆匯出時需補填；不使用裝置時區推算旅程當地時間。</p>
+        <button type="button" className="border rounded p-2 mt-2" onClick={() => {
+          const dep = timezoneDraft.departure.trim(), ret = timezoneDraft.return.trim();
+          if ((dep && !isValidTimeZone(dep)) || (ret && !isValidTimeZone(ret))) { setDateNotice('時區格式無效，請輸入例如 Asia/Tokyo。'); return; }
+          const days = inclusiveCalendarDays(dateDraft.start,dateDraft.end);
+          if (!days) { setDateNotice('請確認日期有效，且回程不早於出發。'); return; }
+          const startChanged = dateDraft.start !== dates.start || dep !== departureTimezone, endChanged = dateDraft.end !== dates.end || ret !== returnTimezone;
+          if (!startChanged && !endChanged) { setDateNotice('日期與時區沒有變更。'); return; }
+          setDates(dateDraft);
+          setDepartureTimezone(dep); setReturnTimezone(ret); setTimezoneDraft({departure:dep,return:ret});
+          setFinalTripDetails(prev => ({...prev,startDate:dateDraft.start,duration:days}));
+          setGuardian(prev => markScheduleChanges(prev,startChanged,endChanged));
+          setDateNotice('已更新日期與時區；如曾匯出日曆，請自行更新外部日曆。');
+        }}>更新日期與時區</button>{dateNotice && <p role="status" className="text-sm mt-2">{dateNotice}</p>}
+      </details>
+      <div id="journey-documents" tabIndex={-1}><TripDocuments key={`documents-${activeListId ?? 'new'}`} documents={documents} onChange={(next,kind)=>{setDocuments(next);setGuardian(prev=>markDocumentChanges(prev,kind));}} /></div>
+      <div id="journey-disruptions" tabIndex={-1}><TripDisruptions key={`disruptions-${activeListId ?? 'new'}`} documents={documents} disruptions={disruptions} transportPlans={transportPlans} protection={travelProtection} expenses={expenses} onNavigate={area => { const target = document.getElementById(`journey-${area}`); target?.scrollIntoView({behavior:'smooth',block:'start'}); target?.focus({preventScroll:true}); }} openRequest={disruptionOpenRequest} onChange={next=>{setDisruptions(next);setGuardian(prev=>markDocumentChanges(prev,'flight'));}} /></div>
+      <div id="journey-transport" tabIndex={-1}><TransportPlans key={`transport-${activeListId ?? 'new'}`} documents={documents} plans={transportPlans} onChange={next=>{setTransportPlans(next);setGuardian(prev=>markDocumentChanges(prev,'flight'));}} /></div>
+      <div id="journey-protection" tabIndex={-1}><TravelProtectionPanel key={`protection-${activeListId ?? 'new'}`} value={travelProtection} disruptions={disruptions} onChange={next=>{setTravelProtection(next);setGuardian(prev=>prev.tasks.G2 ? {...prev,tasks:{...prev.tasks,G2:{...prev.tasks.G2,needsReview:true}}} : prev);}} /></div>
+      <div id="journey-expenses" tabIndex={-1}><TripExpenses key={`expenses-${activeListId ?? 'new'}`} expenses={expenses} disruptions={disruptions} rates={exchangeRates} onRatesChange={onRatesChange} items={crossBorderItems} onChange={(newExpenses,newItems)=>onShoppingChange(newExpenses,newItems)} /></div>
+      <div id="journey-checks" tabIndex={-1}><GuardianPanel suggestions={{
+        destination,
+        device: travelProtection?.device || '',
+        compatibility: travelProtection ? ({supported:'支援',unsupported:'不支援',unknown:'待確認'})[travelProtection.compatibility] : '',
+        networkNeed: travelProtection?.need || '',
+        flightTime: [onlyFlight?.startDate,onlyFlight?.startTime].filter(Boolean).join(' '),
+        flightTimezone: onlyFlight?.startZone || '',
+        lodgingContact: stays.length === 1 ? stays[0].contact : ''
+
+      }} key={`guardian-${activeListId ?? 'new'}`} state={guardian} onChange={setGuardian} onConfigureTimezone={() => { if (tripSettingsRef.current) { tripSettingsRef.current.open = true; tripSettingsRef.current.scrollIntoView({behavior:'smooth',block:'start'}); tripSettingsRef.current.querySelector('select')?.focus({preventScroll:true}); } }} trip={{id:activeListId ?? '',start:dates.start,end:dates.end,departureTimezone,returnTimezone}} /></div>
+      <button type="button" className="to-packing" onClick={() => { setJourneySection('packing'); window.scrollTo({top:0,behavior:'smooth'}); }}>接著準備行李 <i className="fa-solid fa-arrow-right" aria-hidden="true"></i></button>
+      </div>
+      <div hidden={journeySection !== 'packing'}>
       {/* Step 1 Header */}
-      <div className="bg-white p-6 rounded-2xl shadow-lg shadow-slate-200/50 mb-6 sticky top-4 z-10 border border-slate-100">
+      <div className="bg-white p-6 rounded-2xl shadow-lg shadow-slate-200/50 mb-6 border border-slate-100">
         <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
           <div>
             <h2 className="text-2xl font-bold text-slate-800">客製化您的清單</h2>
@@ -1155,7 +1310,7 @@ const GeneratorTab: React.FC = () => {
             >
               {riskGateReport.blocking > 0 ? `先排除高風險 (${riskGateReport.blocking})` : '完成並歸類'} <i className="fa-solid fa-check-circle"></i>
             </button>
-            {!collabSessionId ? (
+            {CLOUD_FEATURES_ENABLED && (!collabSessionId ? (
               <button
                 onClick={startCollab}
                 className="hidden md:flex bg-white text-indigo-600 border border-indigo-100 hover:bg-indigo-50 px-4 py-3 rounded-xl font-bold transition shadow-sm items-center justify-center gap-2"
@@ -1171,10 +1326,10 @@ const GeneratorTab: React.FC = () => {
                 </div>
                 <span className="text-xs">協作中</span>
               </div>
-            )}
+            ))}
           </div>
         </div>
-        <div className="mb-5 rounded-2xl border border-rose-300 bg-gradient-to-r from-rose-50 via-red-50 to-orange-50 px-4 py-3 shadow-sm">
+        <div className="risk-info mb-5 rounded-2xl border px-4 py-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-sm font-black text-rose-800">
@@ -1197,7 +1352,7 @@ const GeneratorTab: React.FC = () => {
               ))}
             </div>
           </div>
-          <div className="mt-3 flex gap-2">
+          <details className="risk-settings"><summary>風險顯示與判定設定</summary><div className="mt-3 flex gap-2">
             <button
               onClick={() => handleRiskCopyVariantChange('serious')}
               className={`px-3 py-1.5 rounded-lg text-xs font-black border transition ${riskCopyVariant === 'serious'
@@ -1250,6 +1405,7 @@ const GeneratorTab: React.FC = () => {
               注意：一般模式不會強制擋下 High 風險。若你的目標是風險清零，建議切回保守模式。
             </div>
           )}
+          </details>
         </div>
 
         <div
@@ -1257,7 +1413,7 @@ const GeneratorTab: React.FC = () => {
             ? 'border-red-300 bg-red-50'
             : riskReport.summary.total > 0
               ? 'border-amber-300 bg-amber-50'
-              : 'border-emerald-300 bg-emerald-50'
+              : 'border-amber-200 bg-amber-50'
             }`}
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1266,9 +1422,9 @@ const GeneratorTab: React.FC = () => {
                 <i className="fa-solid fa-shield-halved mr-2"></i>出入境風險檢查
               </div>
               <div className="mt-1 text-[11px] text-slate-500">
-                規則版本 {RISK_RULESET_META.version}（{RISK_RULESET_META.updatedAt}）・審核：{RISK_RULESET_META.reviewedBy}
+                來源核對日期 {RISK_RULESET_META.updatedAt}；規則會變更，請查詢最新資料
               </div>
-              <div className="text-[11px] text-slate-500">{RISK_RULESET_META.notes}</div>
+              <div className="text-[11px] text-slate-500">資料可能不完整，請向航空公司與目的地主管機關確認；此結果不代表已符合規定。</div>
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-red-100 text-red-700">
@@ -1285,11 +1441,11 @@ const GeneratorTab: React.FC = () => {
 
           <div className={`mt-3 rounded-xl border px-3 py-2 text-sm font-bold ${riskGateReport.blocking > 0
             ? 'border-red-200 bg-red-100/60 text-red-700'
-            : 'border-emerald-200 bg-emerald-100/70 text-emerald-700'
+            : 'border-amber-200 bg-amber-50 text-amber-800'
             }`}>
             {riskGateReport.blocking > 0
               ? `尚有 ${riskGateReport.blocking} 個高風險項目，請先處理再完成。`
-              : '高風險已清零，可安全完成歸類。'}
+              : riskReport.summary.total > 0 ? `有 ${riskReport.summary.total} 項需要查證；品名無法確認是否合規。` : '未辨識到提示不代表物品合規；仍須自行確認航空與出入境規定。'}
           </div>
           {riskGateReport.blocking > 0 && (
             <div className="mt-2 text-xs font-semibold text-red-700">
@@ -1359,7 +1515,7 @@ const GeneratorTab: React.FC = () => {
 
           {sortedRiskIssues.length > 0 && (
             <div className="mt-3 space-y-2">
-              {sortedRiskIssues.slice(0, 6).map((issue) => {
+              {sortedRiskIssues.map((issue) => {
                 const issueKey = `${issue.itemId}-${issue.type}`;
                 const isExpanded = expandedRiskKey === issueKey;
                 const defaultAction = getDefaultRiskAction(issue);
@@ -1408,7 +1564,7 @@ const GeneratorTab: React.FC = () => {
                         )}
                       </div>
                       <div className="flex gap-2 shrink-0">
-                        <button
+                        {issue.type !== 'REVIEW' && <button
                           onClick={() => resolveRiskIssue(issue, defaultAction)}
                           className="text-xs font-black px-2.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
                         >
@@ -1417,7 +1573,7 @@ const GeneratorTab: React.FC = () => {
                             : defaultAction === 'MOVE_TO_CHECKED'
                               ? '改為託運'
                               : '移除項目'}
-                        </button>
+                        </button>}
                         <button
                           onClick={() => setExpandedRiskKey(isExpanded ? null : issueKey)}
                           className="text-xs font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
@@ -1432,21 +1588,18 @@ const GeneratorTab: React.FC = () => {
                         <div>規則 ID：{issue.ruleId}</div>
                         <div>命中詞：{issue.matchedKeyword || '-'}（{issue.matchedFrom === 'synonym' ? '同義詞' : '關鍵字'}）</div>
                         <div>依據：{issue.source}</div>
+                        {(issue.sourceUrls || []).map((source: {label:string;url:string})=><div key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer" className="underline text-blue-700">{source.label}</a></div>)}
                         <div>後果等級：{getConsequenceLabel(issue.consequenceLevel)}</div>
                         <div>可能後果：{issue.penalty || '-'}</div>
                         <div>
-                          適用：{(issue.appliesCountries || []).map((code: string) => countryNameByCode.get(code) || code).join('/')}
-                          {' '}・方向：{(issue.appliesDirections || []).map((code: string) => directionNameByCode.get(code) || code).join('/')}
+                          適用範圍請依官方來源確認；目前行程欄位不足以判定實際起訖機場與入境地。
                         </div>
-                        <div>更新：{issue.ruleUpdatedAt || '-'} ・信心值：{typeof issue.ruleConfidence === 'number' ? issue.ruleConfidence.toFixed(2) : '-'}</div>
+                        <div>來源核對：{issue.ruleUpdatedAt || '-'}</div>
                       </div>
                     )}
                   </div>
                 );
               })}
-              {sortedRiskIssues.length > 6 && (
-                <div className="text-xs text-slate-500">尚有 {sortedRiskIssues.length - 6} 筆風險項目。</div>
-              )}
             </div>
           )}
 
@@ -1573,7 +1726,7 @@ const GeneratorTab: React.FC = () => {
           </div>
         </div>
 
-        <div className="md:hidden fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200 bg-white/95 backdrop-blur px-4 py-3">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200 bg-white/95 backdrop-blur px-4 py-3" style={{bottom:'calc(4rem + env(safe-area-inset-bottom))'}}>
           <button
             onClick={handleFinish}
             disabled={riskGateReport.blocking > 0}
@@ -1609,13 +1762,13 @@ const GeneratorTab: React.FC = () => {
               return (
                 <React.Fragment key={item.id}>
                   {showGroupHeader && (
-                    <div className="sticky top-[138px] z-10 bg-slate-50/95 backdrop-blur px-5 py-2 border-b border-t border-slate-100 text-xs font-black text-slate-500 tracking-wider uppercase first:border-t-0">
+                    <div className="bg-slate-50/95 px-5 py-2 border-b border-t border-slate-100 text-xs font-black text-slate-500 tracking-wider uppercase first:border-t-0">
                       {item.category}
                     </div>
                   )}
                   <div
                     id={`item-row-${item.id}`}
-                    className={`flex items-center justify-between p-4 transition-colors border-b border-slate-50 last:border-0 ${
+                    className={`packing-item-row flex items-center justify-between p-4 transition-colors border-b border-slate-50 last:border-0 ${
                       focusedRiskItemId === item.id
                         ? 'bg-yellow-50 ring-2 ring-yellow-200'
                         : item.checked
@@ -1623,11 +1776,12 @@ const GeneratorTab: React.FC = () => {
                           : 'bg-slate-50/30'
                     }`}
                   >
-                    <div className="flex items-center gap-4 flex-1 cursor-pointer select-none" onClick={() => handleToggleCheck(item.id)}>
-                      <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${item.checked ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 text-transparent bg-white'}`}>
+                    <div role="checkbox" aria-checked={item.checked} aria-label={`選擇 ${item.name}`} tabIndex={0} className="packing-item-select flex items-center flex-1 cursor-pointer select-none" onClick={() => handleToggleCheck(item.id)} onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); handleToggleCheck(item.id); } }}>
+                      <div className={`packing-item-check w-5 h-5 rounded-md border flex items-center justify-center transition-all ${item.checked ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 text-transparent bg-white'}`}>
                         <i className="fa-solid fa-check text-[10px]"></i>
                       </div>
-                      <div className={item.checked ? 'opacity-100' : 'opacity-60 grayscale'}>
+                      <PackingItemIcon id={item.id} category={item.category} />
+                      <div className={`packing-item-copy ${item.checked ? 'opacity-100' : 'opacity-60 grayscale'}`}>
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className={`text-base ${item.checked ? 'font-bold text-slate-800' : 'font-medium text-slate-600'}`}>{item.name}</p>
                           {item.weight && (
@@ -1644,8 +1798,9 @@ const GeneratorTab: React.FC = () => {
                     </div>
 
                     {item.checked && (
-                      <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-200 shadow-sm ml-2">
+                      <div className="packing-item-quantity flex items-center gap-1 bg-slate-50 rounded-lg p-1 border border-slate-200 shadow-sm ml-2">
                         <button
+                          aria-label={`減少 ${item.name} 數量`}
                           onClick={() => handleUpdateQuantity(item.id, -1)}
                           className="w-7 h-7 flex items-center justify-center rounded bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition"
                         >
@@ -1653,6 +1808,7 @@ const GeneratorTab: React.FC = () => {
                         </button>
                         <span className="w-6 text-center font-bold text-sm text-slate-700">{item.quantity}</span>
                         <button
+                          aria-label={`增加 ${item.name} 數量`}
                           onClick={() => handleUpdateQuantity(item.id, 1)}
                           className="w-7 h-7 flex items-center justify-center rounded bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition"
                         >
@@ -1660,6 +1816,9 @@ const GeneratorTab: React.FC = () => {
                         </button>
                       </div>
                     )}
+                    <button type="button" aria-label={`刪除 ${item.name}`} onClick={() => handleRemoveItem(item.id, item.name)} className="ml-2 w-9 h-9 flex items-center justify-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-700">
+                      <i className="fa-regular fa-trash-can" aria-hidden="true"></i>
+                    </button>
                   </div>
                 </React.Fragment>
               )
@@ -1823,6 +1982,7 @@ const GeneratorTab: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

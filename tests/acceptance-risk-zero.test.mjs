@@ -1,75 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzePackingRisks } from '../utils/riskEngine.js';
-import { applyRiskResolution } from '../utils/riskActions.js';
-import { RISK_KEYWORD_RULES, RISK_RULESET_META } from '../constants/riskKeywordRules.js';
-
-const pickAction = (issueType) => {
-  if (issueType === 'MUST_CARRY_ON') return 'MOVE_TO_CARRY_ON';
-  if (issueType === 'MUST_CHECKED' || issueType === 'LIQUID_LIMIT') return 'MOVE_TO_CHECKED';
-  return 'REMOVE_ITEM';
-};
-
-const base = {
-  category: '雜項',
-  quantity: 1,
-  checked: true,
-};
-
-test('acceptance: outbound packing can be resolved to zero blocking risks', () => {
-  let items = [
-    { ...base, id: 'i1', name: '行動電源', rule: 'Flexible_DefaultChecked' },
-    { ...base, id: 'i2', name: '小刀', rule: 'Flexible_DefaultCarryOn' },
-    { ...base, id: 'i3', name: '洗髮精 >100ml', rule: 'Flexible_DefaultCarryOn' },
-  ];
-
-  const context = { country: 'JP', direction: 'OUTBOUND' };
-  let report = analyzePackingRisks(items, new Map(), context);
-  assert.equal(report.summary.blocking >= 2, true);
-
-  for (const issue of report.issues) {
-    items = applyRiskResolution(items, issue, pickAction(issue.type));
-  }
-
-  report = analyzePackingRisks(items, new Map(), context);
-  assert.equal(report.summary.blocking, 0);
+import {analyzePackingRisks} from '../utils/riskEngine.js';
+import {applyRiskResolution} from '../utils/riskActions.js';
+import {RISK_KEYWORD_RULES,RISK_RULESET_META} from '../constants/riskKeywordRules.js';
+const item=(name,rule)=>({id:name,name,rule,quantity:1,checked:true,category:'雜項'});
+test('checked power bank remains blocking until user moves it; review persists afterwards',()=>{
+ const items=[item('行動電源','Strict_Checked')];const first=analyzePackingRisks(items,new Map(),{country:'JP',direction:'OUTBOUND'});assert.equal(first.summary.blocking,1);
+ const moved=applyRiskResolution(items,first.issues[0],'MOVE_TO_CARRY_ON');const after=analyzePackingRisks(moved,new Map(),{country:'JP',direction:'OUTBOUND'});assert.equal(after.summary.blocking,0);assert.equal(after.issues[0].type,'REVIEW');assert.match(after.issues[0].reason,/2 個/);
 });
-
-test('acceptance: inbound prohibited item is blocked then removable to zero risk', () => {
-  let items = [{ ...base, id: 'b1', name: '牛肉乾', rule: 'Flexible_DefaultChecked' }];
-  const context = { country: 'JP', direction: 'INBOUND' };
-
-  let report = analyzePackingRisks(items, new Map(), context);
-  assert.equal(report.summary.critical, 1);
-  assert.equal(report.summary.blocking, 1);
-
-  items = applyRiskResolution(items, report.issues[0], 'REMOVE_ITEM');
-  report = analyzePackingRisks(items, new Map(), context);
-  assert.equal(report.summary.blocking, 0);
-});
-
-test('acceptance: same prohibited keyword is direction-sensitive', () => {
-  const items = [{ ...base, id: 'b2', name: '牛肉乾', rule: 'Flexible_DefaultChecked' }];
-
-  const outbound = analyzePackingRisks(items, new Map(), { country: 'JP', direction: 'OUTBOUND' });
-  const inbound = analyzePackingRisks(items, new Map(), { country: 'JP', direction: 'INBOUND' });
-
-  assert.equal(outbound.summary.blocking, 0);
-  assert.equal(inbound.summary.blocking, 1);
-});
-
-test('acceptance: ruleset governance metadata is present', () => {
-  assert.ok(RISK_RULESET_META.version);
-  assert.ok(RISK_RULESET_META.updatedAt);
-  assert.ok(RISK_RULESET_META.reviewedBy);
-  assert.ok(Array.isArray(RISK_KEYWORD_RULES));
-  assert.equal(RISK_KEYWORD_RULES.length > 0, true);
-
-  for (const rule of RISK_KEYWORD_RULES) {
-    assert.ok(rule.id);
-    assert.ok(rule.updatedAt);
-    assert.ok(Array.isArray(rule.appliesCountries));
-    assert.ok(Array.isArray(rule.appliesDirections));
-    assert.ok(Array.isArray(rule.keywords));
-  }
-});
+test('meat prompts review in either direction without automatic prohibition',()=>{for(const direction of ['OUTBOUND','INBOUND']){const r=analyzePackingRisks([item('牛肉乾','Flexible_DefaultChecked')],new Map(),{country:'JP',direction});assert.equal(r.issues[0].type,'REVIEW');assert.equal(r.summary.blocking,0);assert.ok(r.issues[0].sourceUrls.length>=2);}});
+test('all published keyword guidance has dated, primary source links',()=>{assert.equal(RISK_RULESET_META.updatedAt,'2026-11-13');for(const r of RISK_KEYWORD_RULES){assert.equal(r.updatedAt,'2026-11-13');assert.ok(r.sourceUrls.length);assert.ok(r.sourceUrls.every(s=>new URL(s.url).protocol==='https:'));}});

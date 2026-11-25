@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { adminTokenMatches } from '../api/requestSecurity.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,25 +56,12 @@ db.exec(`
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 
-const isLocalRequest = (req) => {
-  const ip = req.ip || '';
-  return ip === '127.0.0.1' || ip === '::1' || ip.includes('127.0.0.1');
-};
-
-const tokensEqual = (a, b) => {
-  if (!a || !b) return false;
-  const aa = Buffer.from(a, 'utf8');
-  const bb = Buffer.from(b, 'utf8');
-  if (aa.length !== bb.length) return false;
-  return crypto.timingSafeEqual(aa, bb);
-};
-
 const requireAdmin = (req, res, next) => {
   const headerToken = req.get('x-admin-token') || '';
   const token = headerToken;
 
   if (ADMIN_TOKEN) {
-    if (tokensEqual(token, ADMIN_TOKEN)) {
+    if (adminTokenMatches(ADMIN_TOKEN, token)) {
       next();
       return;
     }
@@ -81,10 +69,6 @@ const requireAdmin = (req, res, next) => {
     return;
   }
 
-  if (process.env.NODE_ENV !== 'production' && isLocalRequest(req)) {
-    next();
-    return;
-  }
   res.status(401).json({ ok: false });
 };
 

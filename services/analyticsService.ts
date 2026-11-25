@@ -1,5 +1,3 @@
-import { apiUrl } from './apiBase';
-
 const USER_KEY = 'tpa_user_id';
 const SESSION_KEY = 'tpa_session_id';
 
@@ -28,40 +26,7 @@ export const getSessionId = () => {
   return getStoredId(window.sessionStorage, SESSION_KEY);
 };
 
-export const trackEvent = async (name: string, payload: Record<string, unknown> = {}) => {
-  if (typeof window === 'undefined') return;
-  const userId = getUserId();
-  const sessionId = getSessionId();
-  if (!userId || !sessionId) return;
-
-  const meta = {
-    locale: navigator.language,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    userAgent: navigator.userAgent,
-    path: window.location.pathname,
-  };
-
-  const body = {
-    userId,
-    sessionId,
-    name,
-    payload,
-    meta,
-  };
-
-  try {
-    if ('sendBeacon' in navigator) {
-      const blob = new Blob([JSON.stringify(body)], { type: 'application/json' });
-      navigator.sendBeacon(apiUrl('/events'), blob);
-      return;
-    }
-    await fetch(apiUrl('/events'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      keepalive: true,
-    });
-  } catch {
-    return;
-  }
+// 本機優先版本不自動傳送旅程或使用事件。保留函式簽名以免影響既有呼叫。
+export const trackEvent = async (_name: string, _payload: Record<string, unknown> = {}) => {
+  return;
 };

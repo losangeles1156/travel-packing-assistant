@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import ts from 'typescript';
+const source=fs.readFileSync(new URL('../domain/expenses.ts',import.meta.url),'utf8');
+const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const {expenseTotals,isExpense}=await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+const entry={id:'one',title:'交通',amount:'0.10',currency:'TWD',date:'',category:'transport',disruptionId:'',receipt:'unknown',note:''};
+test('totals are exact and currencies stay separate',()=>assert.deepEqual(expenseTotals([entry,{...entry,amount:'0.20'},{...entry,amount:'12',currency:'JPY'}]),[{currency:'JPY',amount:'12.00'},{currency:'TWD',amount:'0.30'}]));
+test('empty dates remain unknown and invalid money and dates fail',()=>{assert.equal(isExpense(entry),true);for(const bad of [{amount:'1.001'},{amount:'1e4'},{amount:'-1'},{date:'2026-02-30'},{currency:'tw'}])assert.equal(isExpense({...entry,...bad}),false);});
+const {isExchangeRate,estimateExchange}=await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+test('exchange uses decimal arithmetic with half-up rounding and explicit direction',()=>{assert.equal(estimateExchange('1200.00','0.21'),'252.00');assert.equal(estimateExchange('0.10','0.05'),'0.01');assert.equal(estimateExchange('0.10','0.04'),'0.00');assert.equal(estimateExchange('9999999999.99','0.12345678'),'1234567800.00');assert.throws(()=>estimateExchange('1','0'));});
+test('manual exchange requires source, date, positive rate, and two currencies',()=>{const rate={base:'JPY',target:'TWD',rate:'0.21',date:'2026-11-13',source:'銀行'};assert.equal(isExchangeRate(rate),true);for(const bad of [{rate:'0'},{rate:'1e-9'},{rate:'0.000000001'},{source:' '},{date:'2026-02-30'},{target:'JPY'}])assert.equal(isExchangeRate({...rate,...bad}),false);});

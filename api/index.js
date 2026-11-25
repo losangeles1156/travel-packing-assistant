@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
 import { computeRiskModeKpi } from './riskModeMetrics.js';
+import { requestPeerAddress } from './requestSecurity.js';
 
 let redis = null;
 const hasKV = !!process.env.KV_REST_API_URL;
@@ -192,9 +193,7 @@ const normalizeText = (value, max) => {
 const generateShareId = () => crypto.randomBytes(9).toString('base64url');
 
 const getRequestIp = (req) => {
-  const raw = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-  if (Array.isArray(raw)) return raw[0] || 'unknown';
-  return String(raw).split(',')[0].trim() || 'unknown';
+  return requestPeerAddress(req);
 };
 
 app.use(

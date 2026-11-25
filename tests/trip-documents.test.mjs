@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import ts from 'typescript';
+const source=fs.readFileSync(new URL('../domain/tripDocuments.ts',import.meta.url),'utf8');
+const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const {parseDocumentText,documentError,emptyDocumentFields,isTripDocument}=await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+test('only explicit labelled fields are extracted and private unrelated text is ignored',()=>{const fields=parseDocumentText('flight','航空公司：測試航空\n航班號碼：AB123\n出發機場：台中\n出發日期：2026-12-01\n護照號碼：SECRET\n訂位代碼：PRIVATE');assert.equal(fields.title,'測試航空');assert.equal(fields.flightNumber,'AB123');assert.equal(fields.startDate,'2026-12-01');assert.equal(JSON.stringify(fields).includes('SECRET'),false);assert.equal(JSON.stringify(fields).includes('PRIVATE'),false);});
+test('ambiguous and invalid values are left blank for confirmation',()=>{const fields=parseDocumentText('flight','出發日期：2026-02-30\n出發時間：25:00\n出發機場：台中\n出發機場：台北\n出發時區：unknown');assert.equal(fields.startDate,'');assert.equal(fields.startTime,'');assert.equal(fields.from,'');assert.equal(fields.startZone,'');});
+test('missing timezone is allowed but invalid timezone and reversed lodging dates are rejected',()=>{const fields={...emptyDocumentFields(),title:'測試住宿',startDate:'2026-12-01',endDate:'2026-12-02'};assert.equal(documentError('lodging',fields),'');assert.match(documentError('lodging',{...fields,startZone:'bad/zone'}),/時區/);assert.match(documentError('lodging',{...fields,endDate:'2026-11-30'}),/退房/);});
+test('malformed and oversized records are rejected without throwing',()=>{const doc={...emptyDocumentFields(),id:'x',kind:'flight',source:'manual',createdAt:'2026-11-09T00:00:00Z',updatedAt:'2026-11-09T00:00:00Z',title:'航空'};assert.equal(isTripDocument(doc),true);assert.equal(isTripDocument({...doc,title:123}),false);assert.equal(isTripDocument({...doc,address:'x'.repeat(301)}),false);});
+test('pasted content length is bounded',()=>{assert.throws(()=>parseDocumentText('flight','x'.repeat(10001)),/10,000/);});

@@ -1,0 +1,7 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';
+const js=ts.transpileModule(fs.readFileSync(new URL('../domain/returnItems.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext}}).outputText;
+const {classifyReturnItems}=await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+const input=value=>({value,source:'user',confirmedAt:'2026-11-07T00:00:00Z'});
+const cases=[['牛肉乾','animal'],['豬肉鬆','animal'],['雞蛋','animal'],['香腸','animal'],['火腿','animal'],['新鮮水果','plant'],['種子','plant'],['蔬菜','plant'],['盆栽','plant'],['鮮花','plant'],['處方藥','medicine'],['成藥','medicine'],['藥品','medicine'],['清酒','alcohol_tobacco'],['啤酒','alcohol_tobacco'],['香菸','alcohol_tobacco'],['雪茄','alcohol_tobacco'],['現金','currency'],['外幣','currency'],['黃金','currency'],['植物奶',null],['肉色襪子',null],['普通衣服',null]];
+for(const [item,expected] of cases)test(`回程分類：${item}`,()=>{const r=classifyReturnItems({returnDestination:input('測試地'),returnItems:input(item)});assert.deepEqual(r.categories.map(x=>x.id),expected?[expected]:[]);assert.match(r.action,/仍須/)});
+test('缺少目的地與未確認輸入仍維持待查證',()=>{const r=classifyReturnItems({returnItems:{value:'牛肉乾',source:'ai',confirmedAt:'2026-11-07T00:00:00Z'}});assert.equal(r.destinationKnown,false);assert.equal(r.itemsKnown,false);assert.deepEqual(r.categories,[]);assert.match(r.action,/仍須/)});

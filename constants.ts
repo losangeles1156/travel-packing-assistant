@@ -1,7 +1,7 @@
 
 export const DEBUG_VERSION = 'v1.0.2-explicit-build';
 
-import { ItemCategory, LuggageRule, PackingItem, PreFlightTask, RedZoneWarning, RegulationCategory, RegulationRule, RecommendationItem } from './types';
+import { ItemCategory, LuggageRule, PackingItem, PreFlightTask, RecommendationItem } from './types';
 
 export const DEFAULT_DATABASE: Omit<PackingItem, 'quantity' | 'checked'>[] = [
   // --- Electronics (3C產品) ---
@@ -12,7 +12,7 @@ export const DEFAULT_DATABASE: Omit<PackingItem, 'quantity' | 'checked'>[] = [
   { id: 'e5', name: '備用相機電池 (鋰電池)', category: ItemCategory.ELECTRONICS, rule: LuggageRule.STRICT_CARRY_ON, isDaily: false },
   { id: 'e6', name: '筆記型電腦/平板', category: ItemCategory.ELECTRONICS, rule: LuggageRule.STRICT_CARRY_ON, isDaily: false },
   { id: 'e7', name: '無線耳機 (含充電盒)', category: ItemCategory.ELECTRONICS, rule: LuggageRule.STRICT_CARRY_ON, isDaily: false },
-  { id: 'e8', name: 'Wifi機 / 上網Sim卡', category: ItemCategory.ELECTRONICS, rule: LuggageRule.STRICT_CARRY_ON, isDaily: false },
+  { id: 'e8', name: 'Wi-Fi 分享器（實體設備）', category: ItemCategory.ELECTRONICS, rule: LuggageRule.STRICT_CARRY_ON, isDaily: false },
   { id: 'e9', name: '自拍棒 / 腳架', category: ItemCategory.ELECTRONICS, rule: LuggageRule.FLEXIBLE_CHECKED, isDaily: false }, // 管徑/長度限制，託運較保險
   { id: 'e10', name: 'Sim卡退卡針', category: ItemCategory.ELECTRONICS, rule: LuggageRule.FLEXIBLE_CARRY_ON, isDaily: false },
 
@@ -61,7 +61,7 @@ export const DEFAULT_DATABASE: Omit<PackingItem, 'quantity' | 'checked'>[] = [
 
 export const PRE_FLIGHT_TASKS: PreFlightTask[] = [
   // Critical Physical Documents (Moved from packing list)
-  { id: 'crit1', task: '確認並攜帶「實體護照」 (有效期限需6個月以上)', completed: false, important: true },
+  { id: 'crit1', task: '確認並攜帶「實體護照」，依目的地與轉機地規定確認效期', completed: false, important: true },
   { id: 'crit2', task: '確認並攜帶「實體簽證 / 入境許可」', completed: false, important: true },
   { id: 'crit3', task: '備妥「機票 / 登機證」 (建議截圖或列印紙本備用)', completed: false, important: true },
 
@@ -165,239 +165,6 @@ export const TRIP_TEMPLATES = [
   addItems: Array<Omit<PackingItem, 'quantity' | 'checked'> & { isDaily?: boolean }>;
   addTasks: PreFlightTask[];
 }>;
-
-export const RED_ZONE_WARNINGS: RedZoneWarning[] = [
-  {
-    id: 'rz1',
-    title: '生鮮肉類 / 加工肉品',
-    severity: 'Critical',
-    tag: '絕對禁止入境',
-    description: '包括肉乾、香腸、火腿、臘肉、肉鬆、含肉塊之泡麵(如滿漢大餐)。真空包裝亦「不可」攜帶。',
-    consequences: '台灣海關初犯罰款新台幣 20 萬元，再犯罰款 100 萬元。外籍人士未繳清將被拒絕入境。',
-    handling: '請在登機前食用完畢或丟棄。若已帶下飛機，請在過海關前丟入「農畜產品棄置箱」或主動走紅線申報。'
-  },
-  {
-    id: 'rz2',
-    title: '生鮮植物 / 蔬果 / 種子',
-    severity: 'Critical',
-    tag: '絕對禁止入境',
-    description: '所有新鮮水果、蔬菜、種子、活體植物、土壤。',
-    consequences: '違反植物防疫檢疫法，最高可處新台幣 15 萬元罰鍰。',
-    handling: '嚴禁攜帶入境。飛機餐的水果請勿帶下飛機。請在海關前丟棄或主動申報檢疫。'
-  },
-  {
-    id: 'rz3',
-    title: '鋰電池 / 行動電源',
-    severity: 'High',
-    tag: '嚴禁託運',
-    description: '所有鋰電池、行動電源、內建鋰電池之電子產品(若無法拆卸)必須「手提」上飛機。',
-    consequences: '若放入託運行李，將被安檢攔下開箱取出，嚴重者可能面臨罰款或拒絕運送。',
-    handling: '務必隨身攜帶。單顆電池不得超過 160Wh (超過100Wh需經航空公司同意)。'
-  },
-  {
-    id: 'rz4',
-    title: '防風打火機 / 燃料油',
-    severity: 'High',
-    tag: '禁止攜帶',
-    description: '藍焰(防風)打火機、雪茄打火機、打火機油，無論手提或託運皆「完全禁止」。',
-    consequences: '安檢時會被沒收丟棄。若隱匿攜帶可能觸犯飛航安全法規。',
-    handling: '一般非防風打火機每人限隨身攜帶一枚(不可託運)。防風型請勿攜帶。'
-  },
-  {
-    id: 'rz5',
-    title: '鉛酸電池製品',
-    severity: 'High',
-    tag: '禁止攜帶',
-    description: '常見於舊式手電筒、電蚊拍、充電式隨身風扇。',
-    consequences: '此類電池不穩定，多數航空公司禁止託運也禁止手提。',
-    handling: '請確認電蚊拍/風扇是否為鋰電池(可手提)。若為鉛酸電池請勿攜帶出國。'
-  },
-  {
-    id: 'rz6',
-    title: '超過100ml之液體',
-    severity: 'Medium',
-    tag: '僅限託運',
-    description: '手提行李之液體、膠狀、噴霧類容器單瓶不得超過100ml。',
-    consequences: '安檢時會被要求丟棄。',
-    handling: '若需隨身攜帶，請分裝至100ml以下容器並裝於1公升透明夾鏈袋。大罐保養品/酒類請務必託運。'
-  },
-];
-
-export const REGULATION_CATEGORIES: RegulationCategory[] = [
-  {
-    id: 'reg1',
-    name: '液體/膠狀物',
-    icon: 'fa-bottle-water',
-    description: '隨身攜帶液體限制規定',
-    details: '單一容器不得超過 100ml (3.4 oz)。所有容器需裝入一個不超過 1 公升 (20x20cm) 可重複密封的透明塑膠袋中。每人限帶一袋。超過此限制請放入託運行李。',
-    source: {
-      title: '交通部民航局 - 液體攜帶規定',
-      url: 'https://www.caa.gov.tw/Article.aspx?a=1055&lang=1'
-    }
-  },
-  {
-    id: 'reg2',
-    name: '電池/行動電源',
-    icon: 'fa-battery-full',
-    description: '鋰電池安全規範',
-    details: '備用鋰電池與行動電源 **必須手提**，嚴禁託運。規格通常限制在 100Wh 內可攜帶，100Wh-160Wh 需航空公司批准，超過 160Wh 禁止攜帶。',
-    source: {
-      title: '交通部民航局 - 危險物品規範',
-      url: 'https://www.caa.gov.tw/Article.aspx?a=1055&lang=1'
-    }
-  },
-  {
-    id: 'reg3',
-    name: '藥品',
-    icon: 'fa-pills',
-    description: '處方藥與成藥規定',
-    details: '建議攜帶醫師處方箋或藥品說明書。日本入境對於含有「偽麻黃鹼」或「可待因」之感冒藥有嚴格限制。',
-    source: {
-      title: '日本國海關 - 醫藥品輸入',
-      url: 'https://www.customs.go.jp/english/c-answer_e/imtsukan/1806_e.htm'
-    }
-  },
-  {
-    id: 'reg4',
-    name: '現金/黃金',
-    icon: 'fa-coins',
-    description: '出入境現金限額',
-    details: '台灣出境：新台幣 10 萬元、人民幣 2 萬元、美金 1 萬元等值外幣。超過需申報，否則沒入。',
-    source: {
-      title: '財政部關務署 - 洗錢防制物品',
-      url: 'https://taipei.customs.gov.tw/singlehtml/3392?cntId=cus2_3392_3392_1355'
-    }
-  },
-  {
-    id: 'reg5',
-    name: '食品',
-    icon: 'fa-utensils',
-    description: '動植物檢疫規定',
-    details: '請勿攜帶肉類製品 (含真空包裝)、新鮮蔬果、種子、土壤。泡麵建議檢查是否含肉塊。',
-    source: {
-      title: '農業部動植物防疫檢疫署',
-      url: 'https://www.aphia.gov.tw/ws.php?id=13034'
-    }
-  },
-];
-
-export const REGULATION_RULES: RegulationRule[] = [
-  {
-    id: 'r1',
-    name: '行動電源 / 鋰電池',
-    categoryId: 'reg2',
-    keywords: ['行動電源', '充電寶', '鋰電池', 'power bank', 'battery'],
-    decision: 'CONDITIONAL',
-    summary: '必須手提，禁止託運',
-    conditions: ['單顆電池不得超過 160Wh', '100Wh-160Wh 需航空公司同意'],
-    source: {
-      title: '民航局危險物品清單',
-      url: 'https://www.caa.gov.tw/Article.aspx?a=1055&lang=1'
-    }
-  },
-  {
-    id: 'r2',
-    name: '液體 / 膠狀物',
-    categoryId: 'reg1',
-    keywords: ['液體', '乳液', '化妝水', '洗髮精', '沐浴乳', '防曬', '香水', '酒'],
-    decision: 'CONDITIONAL',
-    summary: '手提單瓶不得超過 100ml',
-    conditions: ['超過 100ml 請託運', '需裝入 1 公升透明夾鏈袋'],
-    source: {
-      title: '民航局液體攜帶規定',
-      url: 'https://www.caa.gov.tw/Article.aspx?a=1055&lang=1'
-    }
-  },
-  {
-    id: 'r3',
-    name: '刀具 / 剪刀',
-    categoryId: 'reg2',
-    keywords: ['刀', '剪刀', '指甲剪', '美工刀', '瑞士刀'],
-    decision: 'CHECKED',
-    summary: '禁止手提，需託運',
-  },
-  {
-    id: 'r4',
-    name: '無人機',
-    categoryId: 'reg2',
-    keywords: ['無人機', 'drone', '航拍'],
-    decision: 'CONDITIONAL',
-    summary: '電池需手提，機體視航空公司規範',
-    conditions: ['若含鋰電池，需遵守電池規範'],
-  },
-  {
-    id: 'r5',
-    name: '肉類製品',
-    categoryId: 'reg5',
-    keywords: ['肉乾', '香腸', '火腿', '臘肉', '肉鬆', '泡麵'],
-    decision: 'BANNED',
-    summary: '多數國家禁止入境',
-    conditions: ['台灣入境嚴禁攜帶肉類製品', '日本入境亦嚴禁肉類'],
-    source: {
-      title: '防檢署 - 入境檢疫',
-      url: 'https://www.aphia.gov.tw/ws.php?id=13034'
-    }
-  },
-  {
-    id: 'r6',
-    name: '新鮮蔬果 / 植物',
-    categoryId: 'reg5',
-    keywords: ['水果', '蔬菜', '種子', '植物', '土壤'],
-    decision: 'BANNED',
-    summary: '多數國家禁止入境',
-    source: {
-      title: '防檢署 - 植物檢疫',
-      url: 'https://www.aphia.gov.tw/ws.php?id=13034'
-    }
-  },
-  {
-    id: 'r7',
-    name: '藥品 (一般/處方)',
-    categoryId: 'reg3',
-    keywords: ['藥品', '處方', '成藥', '藥水'],
-    decision: 'CONDITIONAL',
-    summary: '建議攜帶處方或藥品說明',
-    conditions: ['液體藥水超過 100ml 需申報'],
-  },
-  {
-    id: 'r8',
-    name: '現金 / 外幣',
-    categoryId: 'reg4',
-    keywords: ['現金', '外幣', '美元', '人民幣'],
-    decision: 'CONDITIONAL',
-    summary: '超過限額需申報',
-    source: {
-      title: '關務署 - 洗錢防制',
-      url: 'https://taipei.customs.gov.tw/singlehtml/3392?cntId=cus2_3392_3392_1355'
-    }
-  },
-  {
-    id: 'r9',
-    name: '日本禁藥 (感冒藥)',
-    categoryId: 'reg3',
-    keywords: ['感冒藥', '鼻炎藥', '偽麻黃鹼', 'stimulant', 'Actifed', 'Sudafed'],
-    decision: 'BANNED',
-    summary: '含 Stimulant 原料之藥品禁止攜入日本',
-    conditions: ['含超過10% Pseudoephedrine 需事前申請', '含有 Codeine 需事前申請'],
-    source: {
-      title: '日本國海關 - 藥品規定',
-      url: 'https://www.customs.go.jp/english/c-answer_e/imtsukan/1806_e.htm'
-    }
-  },
-  {
-    id: 'r10',
-    name: '電子菸 / 加熱菸',
-    categoryId: 'reg2',
-    keywords: ['電子菸', '加熱菸', 'vape', 'iqos'],
-    decision: 'BANNED',
-    summary: '台灣全面禁止攜帶入境',
-    conditions: ['不論數量多寡，一律禁止', '違反者最高罰 500 萬元'],
-    source: {
-      title: '關務署 - 電子菸規定',
-      url: 'https://web.customs.gov.tw/singlehtml/3322?cntId=cus1_3322_3322_1355'
-    }
-  }
-];
 
 export const RECOMMENDATION_ITEMS: RecommendationItem[] = [
   {

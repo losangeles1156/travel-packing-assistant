@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { supabase } from '../services/supabase';
+import { CLOUD_FEATURES_ENABLED } from '../services/featureFlags';
 import { ListSnapshot } from '../services/listStorageService';
 
 type CollabSession = {
@@ -25,7 +26,7 @@ export const useCollabSession = (
 
     // Initialize from URL
     useEffect(() => {
-        if (typeof window === 'undefined') return;
+        if (!CLOUD_FEATURES_ENABLED || typeof window === 'undefined') return;
         const params = new URLSearchParams(window.location.search);
         const collabId = params.get('collab');
         if (collabId) {
@@ -35,11 +36,13 @@ export const useCollabSession = (
 
     // Fetch initial data & Subscribe
     useEffect(() => {
-        if (!sessionId) return;
+        if (!sessionId || !supabase) return;
+
+        const client = supabase;
 
         // Fetch latest
         const fetchInitial = async () => {
-            const { data, error } = await supabase
+            const { data, error } = await client
                 .from('collab_sessions')
                 .select('*')
                 .eq('id', sessionId)
@@ -53,7 +56,7 @@ export const useCollabSession = (
 
         fetchInitial();
 
-        const channel = supabase
+        const channel = client
             .channel(`collab:${sessionId}`)
             .on(
                 'postgres_changes',
@@ -76,13 +79,13 @@ export const useCollabSession = (
             });
 
         return () => {
-            supabase.removeChannel(channel);
+            client.removeChannel(channel);
         };
     }, [sessionId]);
 
     // Sync upstream (Local -> DB)
     useEffect(() => {
-        if (!sessionId || !currentSnapshot) return;
+        if (!sessionId || !currentSnapshot || !supabase) return;
 
         if (ignoreNextLocalUpdate.current) {
             ignoreNextLocalUpdate.current = false;
@@ -91,10 +94,11 @@ export const useCollabSession = (
 
         if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
+        const client = supabase;
         setIsSyncing(true);
         debounceTimer.current = setTimeout(async () => {
             try {
-                await supabase
+                await client
                     .from('collab_sessions')
                     .update({
                         snapshot: currentSnapshot,
@@ -114,7 +118,7 @@ export const useCollabSession = (
     }, [sessionId, currentSnapshot]);
 
     const startCollab = useCallback(async () => {
-        if (!currentSnapshot) return null;
+        if (!CLOUD_FEATURES_ENABLED || !currentSnapshot || !supabase) return null;
         try {
             const { data, error } = await supabase
                 .from('collab_sessions')

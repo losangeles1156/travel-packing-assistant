@@ -1,16 +1,23 @@
+import { CLOUD_FEATURES_ENABLED } from '../services/featureFlags';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { PackingItem, PreFlightTask, LuggageRule, CustomRuleDef, RuleType, WarningSeverity } from '../types';
-import { RED_ZONE_WARNINGS } from '../constants';
+import { verifiedRegulations, regulationCheckedOn } from '../domain/verifiedRegulations';
 import { trackEvent } from '../services/analyticsService';
 import { copyToClipboard } from '../utils/clipboard';
 import { buildCustomRuleById, getResultRuleBadge, isCarryOnRule } from '../utils/packingRules';
+import { officialSources } from '../domain/sources';
 
 interface ResultViewProps {
   items: PackingItem[];
   tripDetails: { destination: string; startDate: string; duration: number };
   onBack: () => void;
+  onGuardian: () => void;
+  onItemChange: (id:string,update:Partial<PackingItem>) => void;
+  luggageWeights?: {carryActual?:number;carryLimit?:number;checkedActual?:number;checkedLimit?:number};
+  onWeightChange: (value:ResultViewProps['luggageWeights']) => void;
+  saveStatus: 'saving'|'saved'|'error';
   onNewTrip: () => void;
   onShare: () => Promise<{ url: string | null; reason?: string; status?: number }>;
   customRules: CustomRuleDef[];
@@ -27,6 +34,11 @@ const ResultView: React.FC<ResultViewProps> = ({
   items,
   tripDetails,
   onBack,
+  onGuardian,
+  onItemChange,
+  luggageWeights,
+  onWeightChange,
+  saveStatus,
   onNewTrip,
   onShare,
   customRules,
@@ -38,6 +50,7 @@ const ResultView: React.FC<ResultViewProps> = ({
   onStartCollab,
   isSyncing
 }) => {
+  const itemUnit = (item:PackingItem) => item.unit || (/襪|鞋/.test(item.name)?'雙':'件');
 
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -47,6 +60,14 @@ const ResultView: React.FC<ResultViewProps> = ({
   const [scenarioId, setScenarioId] = useState('');
   const [scenarioOnly, setScenarioOnly] = useState(false);
   const noResultSearchRef = useRef<string>('');
+  const printedAtRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const setPrintTime = () => {
+      if (printedAtRef.current) printedAtRef.current.textContent = new Date().toLocaleString('zh-TW', { timeZoneName: 'short' });
+    };
+    window.addEventListener('beforeprint', setPrintTime);
+    return () => window.removeEventListener('beforeprint', setPrintTime);
+  }, []);
   const searchTimerRef = useRef<number | null>(null);
 
   const customRuleById = useMemo(() => buildCustomRuleById(customRules), [customRules]);
@@ -351,7 +372,7 @@ const ResultView: React.FC<ResultViewProps> = ({
       lines.push(title);
       sectionItems.forEach(item => {
         const packed = packedItemIds.has(item.id) ? 'x' : ' ';
-        lines.push(`- [${packed}] ${item.name} x${item.quantity}`);
+        lines.push(`- [${packed}] ${item.name} ${item.quantity}${itemUnit(item)}`);
       });
       lines.push('');
     };
@@ -379,6 +400,7 @@ const ResultView: React.FC<ResultViewProps> = ({
           section,
           item: item.name,
           quantity: item.quantity,
+          unit: itemUnit(item),
           packed: packedItemIds.has(item.id) ? '1' : '0',
           rule: custom?.name || String(item.rule),
         });
@@ -388,7 +410,7 @@ const ResultView: React.FC<ResultViewProps> = ({
     pushRows('carry_on', carryOnItems);
     pushRows('checked', checkedItems);
 
-    const header = ['section', 'item', 'quantity', 'packed', 'rule'];
+    const header = ['section', 'item', 'quantity', 'unit', 'packed', 'rule'];
     const lines = [header.join(',')];
     rows.forEach(r => {
       lines.push(header.map(k => escapeCsv((r as Record<string, unknown>)[k])).join(','));
@@ -490,6 +512,19 @@ const ResultView: React.FC<ResultViewProps> = ({
   const carryOnWeight = getWeightStats(carryOnItems);
   const checkedWeight = getWeightStats(checkedItems);
 
+  const quantityControls = (item:PackingItem) => <div className="flex items-center gap-2 flex-wrap no-print" onClick={e=>e.stopPropagation()}>
+    <button type="button" aria-label={`減少打包 ${item.name} 數量`} onClick={()=>onItemChange(item.id,{quantity:Math.max(1,item.quantity-1)})} className="px-2 border rounded">−</button>
+    <span aria-label={`${item.name} 數量`}>{item.quantity}</span>
+    <button type="button" aria-label={`增加打包 ${item.name} 數量`} onClick={()=>onItemChange(item.id,{quantity:Math.min(999,item.quantity+1)})} className="px-2 border rounded">＋</button>
+    <select aria-label={`${item.name} 單位`} value={itemUnit(item)} onChange={e=>onItemChange(item.id,{unit:e.target.value})} className="border rounded p-1">{['件','個','雙','套','瓶','包','條','盒','組','張'].map(u=><option key={u}>{u}</option>)}</select>
+  </div>;
+
+  const weightSection = (label:string,actualKey:'carryActual'|'checkedActual',limitKey:'carryLimit'|'checkedLimit') => {
+    const actual=luggageWeights?.[actualKey],limit=luggageWeights?.[limitKey];
+    const field=(key:typeof actualKey|typeof limitKey,title:string)=><label className="text-sm">{label}{title}（公斤）<input aria-label={`${label}${title}（公斤）`} type="number" min="0" max="1000" step="0.1" value={luggageWeights?.[key] ?? ''} onChange={e=>{const raw=e.target.value;const n=Number(raw);if(raw!=='' && (!Number.isFinite(n)||n<0||n>1000)) return;onWeightChange({...luggageWeights,[key]:raw===''?undefined:n});}} className="block w-full border rounded-lg p-2 mt-1" /></label>;
+    return <div className="rounded-xl border p-4"><h3 className="font-bold">{label}</h3><div className="grid grid-cols-2 gap-3 mt-2">{field(actualKey,'實測重量')}{field(limitKey,'允許重量')}</div><p className="text-sm mt-2" role="status">{actual===undefined||limit===undefined?'請輸入實測重量及票券允許重量，再比較。':actual>limit?`超過自行輸入的限額，請調整並向航空公司確認。`:`實測重量未超過自行輸入的限額；仍請確認件數及單件限制。`}</p></div>;
+  };
+
   // Helper to get rule display info
   const getRuleDisplay = (rule: RuleType) => {
     return getResultRuleBadge(rule, customRuleById);
@@ -527,8 +562,10 @@ const ResultView: React.FC<ResultViewProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto pb-20">
+      <div className="no-print bg-white border rounded-2xl p-5 mb-5"><h2 className="font-bold text-xl">完成打包後，繼續守護旅程</h2><p className="text-sm mt-2">回到旅程首頁，查看航班、住宿、通訊與其他準備事項。資料不會即時監控。</p><p role="status" aria-live="polite" className="text-sm mt-2">{saveStatus==='saving'?'正在儲存至本機…':saveStatus==='error'?'本機儲存失敗，請保留此頁。':'已儲存至本機'}</p><button type="button" onClick={onGuardian} className="mt-3 rounded-lg bg-slate-800 text-white px-4 py-2">查看旅程守護</button></div>
+      <section aria-label="行李重量提醒" className="no-print bg-white border rounded-2xl p-5 mb-5"><h2 className="font-bold text-xl">行李重量提醒</h2><p className="text-sm my-2">請填整件行李含行李箱的實測重量，以及你向航空公司確認的限額；各航空公司與票種規定不同。</p><div className="grid gap-3 sm:grid-cols-2">{weightSection('手提','carryActual','carryLimit')}{weightSection('託運','checkedActual','checkedLimit')}</div></section>
       {/* Control Bar - Hidden when printing */}
-      <div className="no-print sticky top-4 z-20 bg-white/90 backdrop-blur-md border border-white/20 p-4 mb-6 flex justify-between items-center shadow-lg shadow-slate-200/50 rounded-2xl">
+      <div className="no-print sticky top-4 z-20 bg-white/90 backdrop-blur-md border border-white/20 p-4 mb-6 flex flex-wrap gap-2 justify-between items-center shadow-lg shadow-slate-200/50 rounded-2xl">
         <div className="flex items-center gap-2">
           <button
             onClick={onBack}
@@ -559,14 +596,14 @@ const ResultView: React.FC<ResultViewProps> = ({
           >
             <i className="fa-solid fa-table"></i> 下載 CSV
           </button>
-          <button
+          {CLOUD_FEATURES_ENABLED && <button
             onClick={handleShare}
             disabled={shareBusy}
             className={`px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all active:translate-y-0 ${shareBusy ? 'bg-slate-200 text-slate-400 shadow-slate-100 cursor-not-allowed' : 'bg-white text-slate-700 border border-slate-200 hover:border-blue-300 hover:text-blue-700 shadow-slate-200 hover:-translate-y-0.5'}`}
           >
             <i className="fa-solid fa-link"></i> {shareBusy ? '產生中' : '分享'}
-          </button>
-          {!collabSessionId ? (
+          </button>}
+          {CLOUD_FEATURES_ENABLED && (!collabSessionId ? (
             <button
               onClick={onStartCollab}
               className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl hover:bg-indigo-700 font-bold flex items-center gap-2 shadow-lg shadow-indigo-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
@@ -584,7 +621,7 @@ const ResultView: React.FC<ResultViewProps> = ({
               </div>
               <span>協作中 {isSyncing ? '(同步中...)' : ''}</span>
             </div>
-          )}
+          ))}
           <button
             onClick={handlePrint}
             className="bg-blue-600 text-white px-5 py-2.5 rounded-xl hover:bg-blue-700 font-bold flex items-center gap-2 shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0"
@@ -637,6 +674,7 @@ const ResultView: React.FC<ResultViewProps> = ({
       )}
 
       <div className="print-only">
+        <p>列印時間（裝置時區）：<span ref={printedAtRef}>尚未取得</span>。此清單為列印當時快照；舊版分類與風險資料尚未重新核實，請自行向航空公司及目的地主管機關確認。</p>
         <div className="page-break">
           <div className="border-b border-slate-300 pb-4 mb-5">
             <div className="flex items-end justify-between">
@@ -697,7 +735,7 @@ const ResultView: React.FC<ResultViewProps> = ({
                             {getRuleDisplay(item.rule)?.label ?? ''}
                           </div>
                         </td>
-                        <td className="p-2 text-right font-mono text-slate-700">{item.quantity}</td>
+                        <td className="p-2 text-right font-mono text-slate-700">{item.quantity}{itemUnit(item)}</td>
                         <td className="p-2 text-right font-mono text-slate-700">{item.weight ? `${item.weight}kg` : ''}</td>
                       </tr>
                     );
@@ -734,7 +772,7 @@ const ResultView: React.FC<ResultViewProps> = ({
                             {getRuleDisplay(item.rule)?.label ?? ''}
                           </div>
                         </td>
-                        <td className="p-2 text-right font-mono text-slate-700">{item.quantity}</td>
+                        <td className="p-2 text-right font-mono text-slate-700">{item.quantity}{itemUnit(item)}</td>
                         <td className="p-2 text-right font-mono text-slate-700">{item.weight ? `${item.weight}kg` : ''}</td>
                       </tr>
                     );
@@ -776,35 +814,15 @@ const ResultView: React.FC<ResultViewProps> = ({
 
         <div>
           <div className="border-b border-slate-300 pb-4 mb-5">
-            <div className="text-xl font-black text-slate-900">嚴重違禁品警示</div>
-            <div className="text-sm text-slate-600 mt-1">違反規定可能導致巨額罰款或刑事責任</div>
+            <div className="text-xl font-black text-slate-900">攜帶物品查證</div>
+            <div className="text-sm text-slate-600 mt-1">官方來源核對日期：2026-11-13；請依入境地與實際航班查詢最新規定。</div>
           </div>
 
           <div className="grid gap-4">
-            {RED_ZONE_WARNINGS.map(warning => (
-              <div key={`p-w-${warning.id}`} className="border-2 border-slate-300 rounded-xl p-4 avoid-break">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-base font-black text-slate-900">{warning.title}</div>
-                    <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-500">
-                      <span className="border border-slate-300 rounded px-2 py-0.5 font-bold">{warning.severity}</span>
-                      <span className="border border-slate-300 rounded px-2 py-0.5 font-bold">{warning.tag}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-3 text-sm text-slate-800 font-bold">{warning.description}</div>
-
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <div className="border border-slate-200 rounded-lg p-3">
-                    <div className="text-[10px] font-black text-slate-500 uppercase">違規罰則</div>
-                    <div className="mt-1 text-sm font-bold text-slate-900">{warning.consequences}</div>
-                  </div>
-                  <div className="border border-slate-200 rounded-lg p-3">
-                    <div className="text-[10px] font-black text-slate-500 uppercase">正確處置</div>
-                    <div className="mt-1 text-sm text-slate-800">{warning.handling}</div>
-                  </div>
-                </div>
+            {verifiedRegulations.filter(warning => ['meat','plant','power','sharp','liquid'].includes(warning.id)).map(warning => (
+              <div key={`p-w-${warning.id}`} className="border rounded-xl p-4 avoid-break">
+                <div className="font-bold">{warning.title}</div>
+                <p>{warning.summary}</p><p>適用：{warning.scope}</p>{warning.sources.map(source=><p key={source.url}>{source.label}：{source.url}</p>)}
               </div>
             ))}
           </div>
@@ -1056,7 +1074,7 @@ const ResultView: React.FC<ResultViewProps> = ({
                     <li
                       key={item.id}
                       onClick={() => togglePacked(item.id)}
-                      className="flex items-start gap-3 group cursor-pointer select-none"
+                      className="flex flex-wrap items-start gap-3 group cursor-pointer select-none"
                     >
                       <div className={`w-5 h-5 rounded border-2 mt-1 flex items-center justify-center transition-all duration-200 ${isPacked
                           ? 'bg-blue-500 border-blue-500 text-white'
@@ -1064,7 +1082,7 @@ const ResultView: React.FC<ResultViewProps> = ({
                         } print:bg-white print:border-slate-800 print:text-transparent`}>
                         <i className="fa-solid fa-check text-[10px]"></i>
                       </div>
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <span className={`font-bold transition-colors ${isPacked ? 'text-slate-400 line-through decoration-2 decoration-blue-200' : 'text-slate-700 group-hover:text-blue-700'}`}>
                           {item.name}
                         </span>
@@ -1081,11 +1099,7 @@ const ResultView: React.FC<ResultViewProps> = ({
                           )}
                         </div>
                       </div>
-                      {item.quantity > 1 && (
-                        <span className={`font-mono text-sm ${isPacked ? 'text-slate-300' : 'text-slate-400'}`}>
-                          x{item.quantity}
-                        </span>
-                      )}
+                      {quantityControls(item)}
                     </li>
                   );
                 })}
@@ -1165,7 +1179,7 @@ const ResultView: React.FC<ResultViewProps> = ({
                     <li
                       key={item.id}
                       onClick={() => togglePacked(item.id)}
-                      className="flex items-start gap-3 group cursor-pointer select-none"
+                      className="flex flex-wrap items-start gap-3 group cursor-pointer select-none"
                     >
                       <div className={`w-5 h-5 rounded border-2 mt-1 flex items-center justify-center transition-all duration-200 ${isPacked
                           ? 'bg-orange-500 border-orange-500 text-white'
@@ -1173,7 +1187,7 @@ const ResultView: React.FC<ResultViewProps> = ({
                         } print:bg-white print:border-slate-800 print:text-transparent`}>
                         <i className="fa-solid fa-check text-[10px]"></i>
                       </div>
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <span className={`font-bold transition-colors ${isPacked ? 'text-slate-400 line-through decoration-2 decoration-orange-200' : 'text-slate-700 group-hover:text-orange-700'}`}>
                           {item.name}
                         </span>
@@ -1190,11 +1204,7 @@ const ResultView: React.FC<ResultViewProps> = ({
                           )}
                         </div>
                       </div>
-                      {item.quantity > 1 && (
-                        <span className={`font-mono text-sm ${isPacked ? 'text-slate-300' : 'text-slate-400'}`}>
-                          x{item.quantity}
-                        </span>
-                      )}
+                      {quantityControls(item)}
                     </li>
                   );
                 })}
@@ -1260,68 +1270,19 @@ const ResultView: React.FC<ResultViewProps> = ({
               <i className="fa-solid fa-triangle-exclamation text-xl"></i>
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-red-700">嚴重違禁品警示</h2>
-              <p className="text-red-400 text-sm font-medium">違反下列規定可能導致巨額罰款或刑事責任</p>
+              <h2 className="text-2xl font-bold text-red-700">攜帶物品查證</h2>
+              <p className="text-red-400 text-sm font-medium">以下為需要查證的類別，來源核對日期：{regulationCheckedOn}；請依實際情況查閱最新規定。</p>
+              <p className="text-sm mt-2">{officialSources.filter(s=>s.gate==='G5').map(s=><span key={s.id}><a className="underline text-blue-700" href={s.url} target="_blank" rel="noopener noreferrer">{s.label}（{s.scope}）</a>　</span>)}其他地區請查當地主管機關；開啟需連線。</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-6">
-            {RED_ZONE_WARNINGS.map(warning => {
-              const style = getSeverityStyle(warning.severity);
-              return (
-                <div key={warning.id} className={`rounded-xl border-2 ${style.bg} ${style.border} flex flex-col shadow-sm break-inside-avoid avoid-break`}>
-                  <div className="p-6">
-                    <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-4">
-                      <div className="flex items-start gap-4">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-sm ${style.tag}`}>
-                          <i className={`fa-solid ${style.icon}`}></i>
-                        </div>
-                        <div>
-                          <h3 className={`font-black text-xl text-slate-900`}>{warning.title}</h3>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase border ${style.badge}`}>
-                              Severity: {warning.severity}
-                            </span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${style.tag}`}>
-                              {warning.tag}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <p className="text-slate-700 font-bold mb-6 text-base leading-relaxed border-b border-black/5 pb-4">
-                      {warning.description}
-                    </p>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="bg-white p-4 rounded-xl border border-red-100 shadow-sm relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-2 opacity-10 text-red-500">
-                          <i className="fa-solid fa-gavel text-4xl"></i>
-                        </div>
-                        <div className="text-xs font-black text-red-600 uppercase mb-2 flex items-center gap-2 relative z-10">
-                          <i className="fa-solid fa-gavel"></i> 違規罰則 (Consequences)
-                        </div>
-                        <p className="text-sm font-bold text-slate-800 relative z-10">
-                          {warning.consequences}
-                        </p>
-                      </div>
-                      <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-2 opacity-10 text-blue-500">
-                          <i className="fa-solid fa-clipboard-check text-4xl"></i>
-                        </div>
-                        <div className="text-xs font-black text-blue-600 uppercase mb-2 flex items-center gap-2 relative z-10">
-                          <i className="fa-solid fa-clipboard-check"></i> 正確處置 (Handling)
-                        </div>
-                        <p className="text-sm font-medium text-slate-700 relative z-10">
-                          {warning.handling}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+            {verifiedRegulations.filter(warning => ['meat','plant','power','sharp','liquid'].includes(warning.id)).map(warning => (
+              <div key={warning.id} className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <h3 className="font-bold">{warning.title}</h3>
+                <p className="text-xs mt-1">適用：{warning.scope}</p><p className="text-sm mt-2">{warning.summary}</p><div className="flex flex-wrap gap-3 mt-2">{warning.sources.map(source=><a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer" className="text-sm underline text-blue-700">{source.label}</a>)}</div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

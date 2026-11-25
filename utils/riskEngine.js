@@ -139,6 +139,7 @@ export const analyzePackingRisks = (items, customRuleById, context = {}) => {
       type: winner.rule.type,
       consequenceLevel: winner.rule.consequenceLevel || 'NONE',
       source: winner.rule.source,
+      sourceUrls: winner.rule.sourceUrls || [],
       reason: winner.rule.reason,
       action: winner.rule.action,
       penalty: winner.rule.penalty || '',

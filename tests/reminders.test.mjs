@@ -1,0 +1,23 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';
+const compile=p=>ts.transpileModule(fs.readFileSync(new URL(p,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const date=`data:text/javascript;base64,${Buffer.from(compile('../utils/date.ts')).toString('base64')}`;
+const guardianModule=`data:text/javascript;base64,${Buffer.from(compile('../domain/guardian.ts')).toString('base64')}`;
+const js=compile('../domain/reminders.ts').replace('../utils/date',date).replace('./guardian',guardianModule);
+const {scheduleReminders,createCalendar,sameReminderSnapshot}=await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+const params={id:'trip-1',start:'2026-11-15',end:'2026-11-20',timezone:'Asia/Tokyo',returnTimezone:'Asia/Tokyo',clock:new Date('2026-11-01T23:30:00Z')};
+test('late reminders merge per gate using local journey date',()=>{const list=scheduleReminders(params);const late=list.filter(x=>x.overdue);assert.equal(new Set(late.map(x=>x.gate)).size,late.length);assert.ok(late.every(x=>x.date==='2026-11-02'));});
+test('completed tasks with confirmed inputs and applicability do not export reminders',()=>{const input=value=>({value,source:'user',confirmedAt:'2026-11-01T00:00:00Z'});const state={schemaVersion:1,inputs:{nationality:input('TW'),destination:input('JP'),transit:input('無')},tasks:{G1:{status:'done',needsReview:false,note:'',applicability:'applicable'}}};assert.ok(scheduleReminders({...params,guardian:state}).every(x=>x.gate!=='G1'));assert.deepEqual(scheduleReminders({...params,cancelled:true}),[]);});
+test('completed tasks with missing inputs or unknown applicability remain on the reminder list',()=>{const task={status:'done',needsReview:false,note:'',applicability:'unknown'};const state={schemaVersion:1,inputs:{},tasks:{G1:task}};assert.ok(scheduleReminders({...params,guardian:state}).some(x=>x.gate==='G1'));});
+test('persisted cancellation in guardian state prevents any new reminders',()=>{assert.deepEqual(scheduleReminders({...params,guardian:{schemaVersion:1,inputs:{},tasks:{},cancelled:true}}),[]);});
+test('invalid timezone and dates fail rather than guess',()=>{assert.throws(()=>scheduleReminders({...params,timezone:'invalid'}));assert.throws(()=>scheduleReminders({...params,end:'2026-02-30'}));});
+test('calendar escapes unsafe text and uses all-day end-exclusive date',()=>{const ics=createCalendar([{gate:'G1',date:'2026-11-07',uid:'test',title:'測試,提醒\n文字',overdue:false}],params.clock);assert.match(ics,/DTEND;VALUE=DATE:20261108/);assert.match(ics,/測試\\,提醒\\n文字/);assert.match(ics,/\r\nEND:VCALENDAR\r\n$/);});
+test('snoozed task returns once when its date arrives, and old undated deferrals stay unguessed',()=>{const task=date=>({schemaVersion:1,inputs:{},tasks:{G1:{status:'snoozed',needsReview:false,note:'稍後',...(date?{snoozedUntil:date}:{})}}});assert.equal(scheduleReminders({...params,guardian:task('2026-11-03')}).filter(x=>x.gate==='G1').length,0);const due=scheduleReminders({...params,guardian:task('2026-11-02')}).filter(x=>x.gate==='G1');assert.equal(due.length,1);assert.equal(due[0].date,'2026-11-02');assert.match(due[0].title,/暫緩到期/);assert.equal(scheduleReminders({...params,guardian:task()}).filter(x=>x.gate==='G1').length,0);});
+test('not applicable tasks are excluded until their inputs change and require review',()=>{const task={status:'todo',needsReview:false,note:'無轉機',applicability:'not_applicable'};let guardian={schemaVersion:1,inputs:{},tasks:{G1:task}};assert.ok(scheduleReminders({...params,guardian}).every(x=>x.gate!=='G1'));guardian={...guardian,tasks:{G1:{...task,needsReview:true}}};assert.ok(scheduleReminders({...params,guardian}).some(x=>x.gate==='G1'));});
+
+test('departure and return anchors use their own local dates',()=>{const p={...params,start:'2026-11-02',end:'2026-11-02',timezone:'Pacific/Kiritimati',returnTimezone:'Pacific/Honolulu',clock:new Date('2026-11-01T12:30:00Z')};const r=scheduleReminders(p);assert.ok(r.some(x=>x.gate==='G1'&&x.date==='2026-11-02'));assert.ok(r.some(x=>x.gate==='G5'&&x.date==='2026-11-01'));});
+test('an export preview is stale when a local day changes its reminder schedule',()=>{
+ const p={...params,clock:new Date('2026-11-01T14:59:00Z')};
+ const preview=scheduleReminders(p);
+ assert.equal(sameReminderSnapshot(preview,scheduleReminders({...p,clock:new Date('2026-11-01T14:59:30Z')})),true);
+ assert.equal(sameReminderSnapshot(preview,scheduleReminders({...p,clock:new Date('2026-11-01T15:00:00Z')})),false);
+});

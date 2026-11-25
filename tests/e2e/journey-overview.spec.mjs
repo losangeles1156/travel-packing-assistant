@@ -1,0 +1,66 @@
+import { test, expect } from '@playwright/test';
+
+test('journey overview connects situations to existing records without claiming live monitoring', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('目的地').fill('東京');
+  await page.getByRole('button', { name: '建立旅程' }).click();
+  const dashboard = page.getByRole('region', { name: '旅程總覽' });
+  await expect(dashboard.getByText('尚未記錄方式')).toBeVisible();
+  await expect(dashboard.getByText('資料並非即時狀態', { exact: false })).toBeVisible();
+  await expect(dashboard.getByText('不會自動監測航班或交通', { exact: false })).toBeVisible();
+  await dashboard.getByRole('button', { name: '航班變動' }).click();
+  await dashboard.getByRole('button', { name: '記錄航班變動' }).click();
+  const changes = page.getByRole('region', { name: '旅程變動' });
+  await expect(changes.getByRole('heading', { name: '記錄航班變動' })).toBeVisible();
+  await expect(changes.getByText('請先在「航班與住宿」新增航班。')).toBeVisible();
+  await page.getByRole('button', { name: /行李清單/ }).first().click();
+  await expect(page.getByRole('heading', { name: '客製化您的清單' })).toBeVisible();
+  await page.getByRole('button', { name: '旅程守護' }).click();
+  await expect(dashboard).toBeVisible();
+});
+
+
+test('timeline and disruption review reuse the trip records without assuming impact', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('目的地').fill('測試旅程');
+  await page.getByRole('button', { name: '建立旅程' }).click();
+  const docs = page.getByRole('region', { name: '航班與住宿' });
+  await docs.getByRole('button', { name: '＋ 新增航班' }).click();
+  await docs.getByLabel('航空公司或航班名稱').fill('測試航空');
+  await docs.getByLabel('出發日期', { exact: true }).fill('2026-12-02');
+  await docs.getByRole('button', { name: '確認加入旅程' }).click();
+  await docs.getByRole('button', { name: '＋ 新增住宿' }).click();
+  await docs.getByLabel('住宿名稱').fill('測試住宿');
+  await docs.getByLabel('入住日期').fill('2026-12-03');
+  await docs.getByLabel('聯絡方式（選填）').fill('住宿測試聯絡');
+  await docs.getByRole('button', { name: '確認加入旅程' }).click();
+  const timeline = page.getByLabel('旅程時間軸');
+  await expect(timeline.getByText('測試航空')).toBeVisible();
+  await expect(timeline.getByText('測試住宿')).toBeVisible();
+  await expect(timeline.getByText('2026-12-02')).toBeVisible();
+  const protection = page.getByRole('region', { name: '通訊與保險守護' });
+  await protection.getByRole('button', { name: '編輯守護資料' }).click();
+  await protection.getByLabel('已確認到期日期').fill('2026-12-02');
+  await protection.getByLabel('已確認到期時間').fill('09:00');
+  await protection.getByLabel('到期時區（例如 Asia/Tokyo）').fill('Asia/Tokyo');
+  await protection.getByLabel('網路與離線聯絡備援').fill('備用漫遊');
+  await protection.getByRole('button', { name: '確認守護資料' }).click();
+  const changes = page.getByRole('region', { name: '旅程變動' });
+  await changes.getByRole('button', { name: '＋ 記錄航班變動' }).click();
+  await changes.getByLabel('選擇航班').selectOption({ index: 1 });
+  await changes.getByLabel('新出發日期（選填）').fill('2026-12-02');
+  await changes.getByLabel('新出發時間（選填）').fill('10:00');
+  await changes.getByLabel('新出發時區（選填）').fill('Asia/Tokyo');
+  await changes.getByLabel('資訊來源').fill('航空公司通知');
+  await changes.getByRole('button', { name: '確認記錄變動' }).click();
+  await changes.getByText('查看需要確認的事項').click();
+  await expect(changes.getByText('住宿測試聯絡', { exact: false })).toBeVisible();
+  await expect(changes.getByText('備用漫遊', { exact: false })).toBeVisible();
+  await expect(changes.getByText('不晚於新出發時間', { exact: false })).toBeVisible();
+  await expect(changes.getByText('不代表已受影響', { exact: false })).toBeVisible();
+  await page.getByText('已儲存至本機', { exact: true }).waitFor();
+  await page.reload();
+  await expect(page.getByLabel('旅程時間軸').getByText('測試住宿')).toBeVisible();
+  await page.getByRole('region', { name: '旅程變動' }).getByText('查看需要確認的事項').click();
+  await expect(page.getByText('備用漫遊', { exact: false }).first()).toBeVisible();
+});
