@@ -23,7 +23,7 @@ export default function CrossBorderTab({ expenses, items, defaultDestination, on
   const riskyExpenses = useMemo<RiskExpense[]>(() => {
     const results: RiskExpense[] = [];
     for (const expense of expenses) {
-      const categories = suggestReturnCategories(expense.title);
+      const categories = suggestReturnCategories(`${expense.title}｜${expense.note}`);
       if (!categories.length) continue;
       const linked = items.some(item => item.expenseId === expense.id);
       results.push({ expense, categories, linked });
@@ -39,7 +39,7 @@ export default function CrossBorderTab({ expenses, items, defaultDestination, on
   function createFromExpense(expense: Expense) {
     if (items.length >= CROSS_BORDER_ITEM_LIMIT) { setNotice('跨境物品清單已達上限。'); return; }
     const id = 'item:' + (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    const categories = suggestReturnCategories(expense.title);
+    const categories = suggestReturnCategories(`${expense.title}｜${expense.note}`);
     const category = categories[0]?.id as CrossBorderItem['category'] ?? 'unknown';
     const newItem: CrossBorderItem = { ...emptyReturnItem(), destination: defaultDestination, category, id, title: expense.title, intent: 'undecided', expenseId: expense.id };
     onChange([...items, newItem]);
