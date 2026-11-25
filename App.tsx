@@ -125,7 +125,7 @@ function App() {
             className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${activeTab === Tab.GENERATOR ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <div className={`text-xl mb-0.5 ${activeTab === Tab.GENERATOR ? 'transform -translate-y-1 transition-transform' : ''}`}>
-                <i className="fa-solid fa-list-check"></i>
+                <i className="fa-solid fa-list-check" aria-hidden="true"></i>
             </div>
             <span className="text-[10px] font-bold">我的旅程</span>
           </button>
@@ -135,7 +135,7 @@ function App() {
             className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${activeTab === Tab.REGULATIONS ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <div className={`text-xl mb-0.5 ${activeTab === Tab.REGULATIONS ? 'transform -translate-y-1 transition-transform' : ''}`}>
-                <i className="fa-solid fa-scale-balanced"></i>
+                <i className="fa-solid fa-scale-balanced" aria-hidden="true"></i>
             </div>
             <span className="text-[10px] font-bold">法規查詢</span>
           </button>
@@ -156,7 +156,7 @@ function App() {
               className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${activeTab === Tab.ADMIN ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
             >
               <div className={`text-xl mb-0.5 ${activeTab === Tab.ADMIN ? 'transform -translate-y-1 transition-transform' : ''}`}>
-                  <i className="fa-solid fa-chart-line"></i>
+                  <i className="fa-solid fa-chart-line" aria-hidden="true"></i>
               </div>
               <span className="text-[10px] font-bold">管理</span>
             </button>

@@ -58,6 +58,10 @@ export type CrossBorderItem = ReturnItem & {
   expenseId?: string;
   packageImage?: string;
 };
+export function crossBorderItemFromExpense(expense:Pick<Expense,'id'|'title'>, destination:ReturnItem['destination'], category:ReturnItem['category'], intent:CrossBorderItem['intent']):CrossBorderItem {
+  const id = 'item:' + (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  return { ...emptyReturnItem(), destination, category, id, title: expense.title, intent, expenseId: expense.id };
+}
 
 export function isCrossBorderItem(value: unknown): value is CrossBorderItem {
   if (!isReturnItem(value)) return false;

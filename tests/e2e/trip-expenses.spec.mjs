@@ -23,3 +23,15 @@ test('expenses can be created and reopened offline',async({page,context})=>{
 test('backup and restore retain expenses',async({page})=>{
  await page.goto('/');await page.getByLabel('目的地').fill('備份測試');await page.getByRole('button',{name:'建立旅程'}).click();const area=page.getByRole('region',{name:'旅途記帳'});await area.getByRole('button',{name:'＋ 新增支出'}).click();await area.getByLabel('支出名稱').fill('備份餐費');await area.getByLabel('金額').fill('99');await area.getByRole('button',{name:'儲存支出'}).click();await page.getByText('已儲存至本機',{exact:true}).waitFor();await page.getByRole('button',{name:'工具'}).click();const backup=page.getByRole('region',{name:'本機資料備份'});await backup.locator('summary').click();const [download]=await Promise.all([page.waitForEvent('download'),backup.getByRole('button',{name:'下載備份',exact:true}).click()]);const path=await download.path();page.once('dialog',dialog=>dialog.accept());await backup.getByRole('button',{name:'刪除全部本機資料'}).click();await expect(backup.getByText('清單與對應舊版副本已刪除',{exact:false})).toBeVisible();await backup.locator('input[type=file]').setInputFiles(path);await backup.getByRole('button',{name:'確認合併'}).click();await expect(backup.getByText('匯入完成。',{exact:true})).toBeVisible();await expect(area.getByText('備份餐費',{exact:true})).toBeVisible();
 });
+
+test('saving an expense with fresh produce or meat warns right away',async({page})=>{
+ await page.goto('/');await page.getByLabel('目的地').fill('入境提醒測試');await page.getByRole('button',{name:'建立旅程'}).click();
+ const area=page.getByRole('region',{name:'旅途記帳'});
+ const add=async(title,note='')=>{await area.getByRole('button',{name:'＋ 新增支出'}).click();await area.getByLabel('支出名稱').fill(title);await area.getByLabel('金額').fill('500');await area.getByLabel('幣別（三碼）').fill('JPY');if(note)await area.getByLabel('備註（選填）').fill(note);await area.getByRole('button',{name:'儲存支出'}).click();};
+ await add('草莓大福');await expect(area.getByText('可能含有不能帶回台灣的品項',{exact:false})).toHaveCount(0);
+ await add('草莓一盒');const alert=area.locator('.expense-risk-alert');await expect(alert).toContainText('「草莓一盒」可能含有不能帶回台灣的品項');await expect(alert).toBeFocused();
+ await alert.getByRole('button',{name:'會在當地吃完'}).click();await expect(alert).toHaveCount(0);await expect(area.getByText('已記下「草莓一盒」會在當地吃完',{exact:false})).toBeVisible();
+ await add('超市採買','和牛 2 盒');await expect(alert).toContainText('動物產品');
+ await alert.getByRole('button',{name:'加入跨境檢核'}).click();await expect(alert).toHaveCount(0);
+ await page.getByRole('button',{name:'旅遊記帳'}).click();const list=page.getByRole('main');await expect(list.getByText('1 件待確認')).toBeVisible();await expect(list.getByRole('button',{name:'加入檢核'})).toHaveCount(0);
+});

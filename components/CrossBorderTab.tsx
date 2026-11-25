@@ -1,15 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { carryIntentLabels, CROSS_BORDER_ITEM_LIMIT, emptyReturnItem, isCrossBorderItem, needsBorderReview, type CrossBorderItem, type Expense } from '../domain/expenses';
-import { suggestReturnCategories } from '../domain/returnItems';
+import { carryIntentLabels, CROSS_BORDER_ITEM_LIMIT, crossBorderItemFromExpense, emptyReturnItem, isCrossBorderItem, needsBorderReview, type CrossBorderItem, type Expense } from '../domain/expenses';
+import { expenseReturnCategories, prohibitedReturnCategories } from '../domain/returnItems';
 import { ReturnItemFields, ReturnItemReview } from './ReturnItemReview';
 
 type RiskExpense = {
   expense: Expense;
-  categories: { id: string; label: string }[];
+  categories: ReturnType<typeof expenseReturnCategories>;
   linked: boolean;
 };
-
-const STRICT_CATEGORIES = new Set(['animal', 'plant']);
 
 export default function CrossBorderTab({ expenses, items, defaultDestination, onChange }: {
   expenses: Expense[];
@@ -23,7 +21,7 @@ export default function CrossBorderTab({ expenses, items, defaultDestination, on
   const riskyExpenses = useMemo<RiskExpense[]>(() => {
     const results: RiskExpense[] = [];
     for (const expense of expenses) {
-      const categories = suggestReturnCategories(`${expense.title}｜${expense.note}`);
+      const categories = expenseReturnCategories(expense);
       if (!categories.length) continue;
       const linked = items.some(item => item.expenseId === expense.id);
       results.push({ expense, categories, linked });
@@ -32,17 +30,14 @@ export default function CrossBorderTab({ expenses, items, defaultDestination, on
   }, [expenses, items]);
 
   const hasProhibited = riskyExpenses.some(r =>
-    r.categories.some(c => STRICT_CATEGORIES.has(c.id))
+    r.categories.some(c => prohibitedReturnCategories.has(c.id))
   );
   const borderReviewItems = items.filter(needsBorderReview);
 
   function createFromExpense(expense: Expense) {
     if (items.length >= CROSS_BORDER_ITEM_LIMIT) { setNotice('跨境物品清單已達上限。'); return; }
-    const id = 'item:' + (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    const categories = suggestReturnCategories(`${expense.title}｜${expense.note}`);
-    const category = categories[0]?.id as CrossBorderItem['category'] ?? 'unknown';
-    const newItem: CrossBorderItem = { ...emptyReturnItem(), destination: defaultDestination, category, id, title: expense.title, intent: 'undecided', expenseId: expense.id };
-    onChange([...items, newItem]);
+    const category = expenseReturnCategories(expense)[0]?.id as CrossBorderItem['category'] ?? 'unknown';
+    onChange([...items, crossBorderItemFromExpense(expense, defaultDestination, category, 'undecided')]);
     setNotice(`已將「${expense.title}」加入跨境物品清單。`);
   }
 
@@ -84,7 +79,7 @@ export default function CrossBorderTab({ expenses, items, defaultDestination, on
         {riskyExpenses.map(({ expense, categories, linked }) => <article className="trip-document-card" key={expense.id}><div>
           <h3>{expense.title}</h3>
           <p>{expense.currency} {expense.amount} · {expense.date || '日期未記錄'}</p>
-          <p className="cb-risk-tags">{categories.map(c => <span key={c.id} className={`cb-risk-tag ${STRICT_CATEGORIES.has(c.id) ? 'cb-risk-danger' : 'cb-risk-warning'}`}>{c.label}</span>)}</p>
+          <p className="cb-risk-tags">{categories.map(c => <span key={c.id} className={`cb-risk-tag ${prohibitedReturnCategories.has(c.id) ? 'cb-risk-danger' : 'cb-risk-warning'}`}>{c.label}</span>)}</p>
           {linked ? <p className="cb-status-linked"><i className="fa-solid fa-circle-check" aria-hidden="true" /> 已加入跨境物品清單</p>
            : <p className="cb-status-unlinked">尚未確認是否攜帶過境</p>}
         </div>
@@ -112,7 +107,7 @@ export default function CrossBorderTab({ expenses, items, defaultDestination, on
       {items.length > 0 && <div className="trip-document-list">
         {[...items.filter(needsBorderReview), ...items.filter(i => !needsBorderReview(i))].map(item => <article className="trip-document-card" key={item.id}><div>
           <h3>{item.title}</h3>
-          <p>{carryIntentLabels[item.intent]} · {item.expenseId ? '已連結支出' : '手動新增'}</p>
+          <p>{carryIntentLabels[item.intent]} · {item.expenseId ? '已連結支出' : '未連結支出'}</p>
           {needsBorderReview(item) && <ReturnItemReview item={item} title={item.title} />}
         </div><div className="trip-document-actions">
           <button type="button" aria-label={`編輯 ${item.title}`} onClick={() => editItem(item)}>編輯</button>

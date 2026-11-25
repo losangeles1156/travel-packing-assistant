@@ -23,6 +23,11 @@ const patterns: {id:ReturnCategory;label:string;pattern:RegExp}[] = [
 export function suggestReturnCategories(text: string) {
   return patterns.filter(x => x.pattern.test(text)).map(({id,label})=>({id,label}));
 }
+export const prohibitedReturnCategories: ReadonlySet<ReturnCategory> = new Set(['animal','plant']);
+// A non-space separator keeps the note from reading as a suffix of the title (草莓 + 大福).
+export function expenseReturnCategories(expense:{title:string;note:string}) {
+  return suggestReturnCategories(`${expense.title}｜${expense.note}`);
+}
 export function classifyReturnItems(inputs: InputMap) {
   const read=(key:string)=>{const i=inputs[key];return i?.source==='user' && Number.isFinite(Date.parse(i.confirmedAt)) && typeof i.value==='string' ? i.value.trim() : '';};
   const items=read('returnItems'), destination=read('returnDestination');
