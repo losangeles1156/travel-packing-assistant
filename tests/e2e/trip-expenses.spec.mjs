@@ -41,7 +41,7 @@ test('pasted receipt text fills an expense draft locally and keeps typed values'
  const area=page.getByRole('region',{name:'旅途記帳'});
  await area.getByRole('button',{name:'＋ 新增支出'}).click();
  await area.getByLabel('金額').fill('5000');
- await area.getByText('貼上收據文字，自動填入').click();
+ await area.locator('.receipt-text summary').click();
  await area.getByLabel('收據文字').fill('ファミリーマート 新宿東口店\n2026年11月25日 14:32\n和牛 切り落とし ￥３，２８０※\nいちご 1パック ￥９８０※\n合計 ¥4,260\nお預り ¥5,000');
  await area.getByRole('button',{name:'解析並填入'}).click();
  const result=area.getByRole('status').filter({hasText:'已填入'});
@@ -56,6 +56,39 @@ test('pasted receipt text fills an expense draft locally and keeps typed values'
  await expect(area.getByLabel('備註（選填）')).toHaveValue('品項：和牛 切り落とし、いちご 1パック');
  await area.getByRole('button',{name:'儲存支出'}).click();
  const alert=area.locator('.expense-risk-alert');await expect(alert).toContainText('動物產品');await expect(alert).toContainText('植物及農產品');
- await area.getByRole('button',{name:'＋ 新增支出'}).click();await area.getByText('貼上收據文字，自動填入').click();
+ await area.getByRole('button',{name:'＋ 新增支出'}).click();await area.locator('.receipt-text summary').click();
  await area.getByRole('button',{name:'解析並填入'}).click();await expect(area.getByRole('alert').filter({hasText:'請先貼上收據文字'})).toBeVisible();
+});
+
+const sharedReceipt='ローソン 梅田店\n2026年11月26日 21:10\nいちご 1パック ¥980※\n合計 ¥980';
+test('receipt text shared from Android waits for a trip, then opens a filled expense draft',async({page})=>{
+ await page.goto('/?receipt_text='+encodeURIComponent(sharedReceipt));
+ await expect(page.getByRole('status').filter({hasText:'已收到分享的收據文字'})).toBeVisible();
+ expect(page.url()).not.toContain('receipt_text');
+ await page.getByLabel('目的地').fill('大阪');await page.getByRole('button',{name:'建立旅程'}).click();
+ const area=page.getByRole('region',{name:'旅途記帳'});
+ await expect(area.getByLabel('支出名稱')).toHaveValue('ローソン 梅田店');
+ await expect(area.getByLabel('金額')).toHaveValue('980');
+ await expect(area.getByLabel('分類')).toHaveValue('shopping');
+ await expect(area.getByRole('status').filter({hasText:'已填入'})).toBeVisible();
+});
+
+test('receipt text shared into an existing trip opens the expense draft directly',async({page})=>{
+ await page.goto('/');await page.getByLabel('目的地').fill('京都');await page.getByRole('button',{name:'建立旅程'}).click();
+ await page.getByText('已儲存至本機',{exact:true}).waitFor();
+ await page.goto('/?receipt_title=%E6%94%B6%E6%93%9A&receipt_text='+encodeURIComponent(sharedReceipt));
+ const area=page.getByRole('region',{name:'旅途記帳'});
+ await expect(area.getByLabel('支出名稱')).toHaveValue('ローソン 梅田店');
+ await expect(area.getByLabel('收據文字')).toHaveValue(sharedReceipt);
+ expect(page.url()).not.toContain('receipt_text');
+});
+
+test('ledger tab button opens the receipt capture steps on the journey page',async({page})=>{
+ await page.goto('/');await page.getByLabel('目的地').fill('札幌');await page.getByRole('button',{name:'建立旅程'}).click();
+ await page.getByRole('button',{name:'旅遊記帳',exact:true}).click();
+ await page.getByRole('region',{name:'記一筆購物'}).getByRole('button',{name:'拍收據記帳'}).click();
+ const area=page.getByRole('region',{name:'旅途記帳'});
+ await expect(area.getByText('選取文字後按「分享」，選「旅程準備」',{exact:false})).toBeVisible();
+ await expect(area.getByLabel('收據文字')).toHaveValue('');
+ await expect(area.getByLabel('分類')).toHaveValue('shopping');
 });

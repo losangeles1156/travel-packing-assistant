@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';
 const js=ts.transpileModule(fs.readFileSync(new URL('../domain/receiptText.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
-const {parseReceiptText,applyReceiptDraft}=await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+const {parseReceiptText,applyReceiptDraft,readSharedReceipt}=await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
 const names=d=>d.items.map(i=>i.name);
 
 test('日本便利商店收據：全形數字、輕減稅率標記、小計稅額找零不算品項',()=>{
@@ -33,3 +33,9 @@ test('套用時只填空白欄位，保留使用者已填的值',()=>{
  const b=applyReceiptDraft({...empty,title:'晚餐採買',amount:'1600',note:'朋友代墊'},draft);assert.equal(b.next.title,'晚餐採買');assert.equal(b.next.amount,'1600');assert.equal(b.next.currency,'TWD');assert.deepEqual(b.kept,['名稱','金額','幣別']);assert.equal(b.next.note,'朋友代墊\n品項：和牛、いちご');
 });
 test('品項過多時截斷備註，不超過 500 字',()=>{const items=Array.from({length:80},(_,i)=>({name:`商品名稱很長的品項${i}`,amount:'100'}));const r=applyReceiptDraft({title:'',amount:'',currency:'JPY',date:'',note:'',category:'shopping'},{items,missing:[]});assert.ok(r.next.note.length<=500);assert.match(r.next.note,/等 80 項$/);});
+test('從分享網址取出收據文字，保留其他參數',()=>{
+ assert.equal(readSharedReceipt('?share=abc'),null);
+ assert.deepEqual(readSharedReceipt('?receipt_title=%E6%94%B6%E6%93%9A&receipt_text=%E5%90%88%E8%A8%88+%C2%A5100&share=abc'),{text:'合計 ¥100',rest:'share=abc'});
+ assert.deepEqual(readSharedReceipt('?receipt_title=Lens&receipt_url=https%3A%2F%2Fexample.com'),{text:'Lens\nhttps://example.com',rest:''});
+ assert.equal(readSharedReceipt('?receipt_text='+'a'.repeat(20000)).text.length,10000);
+});

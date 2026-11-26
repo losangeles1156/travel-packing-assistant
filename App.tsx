@@ -9,6 +9,7 @@ import AdminDashboardTab from './components/AdminDashboardTab';
 import { trackEvent } from './services/analyticsService';
 import { CLOUD_FEATURES_ENABLED } from './services/featureFlags';
 import type { Expense, CrossBorderItem, ExchangeRate } from './domain/expenses';
+import { takeSharedReceiptText, type ReceiptRequest } from './domain/receiptText';
 
 enum Tab {
   GENERATOR = 'generator',
@@ -28,6 +29,7 @@ function App() {
   const [storageError, setStorageError] = useState('');
   const [storageRevision, setStorageRevision] = useState(0);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [receiptRequest, setReceiptRequest] = useState<ReceiptRequest | null>(null);
   const flushRef = useRef<(() => Promise<void>) | null>(null);
   const registerFlush = useCallback((flush: (() => Promise<void>) | null) => { flushRef.current = flush; }, []);
   const flush = async () => { if (flushRef.current) await flushRef.current(); };
@@ -42,6 +44,11 @@ function App() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
+  }, []);
+
+  useEffect(() => {
+    const shared = takeSharedReceiptText();
+    if (shared) setReceiptRequest({ id: Date.now(), text: shared });
   }, []);
 
   useEffect(() => {
@@ -89,7 +96,7 @@ function App() {
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="app-brand flex items-center gap-3">
             <div className="app-brand-mark"><i className="fa-solid fa-plane-departure" aria-hidden="true"></i></div>
-            <div><h1>旅程準備助手</h1><p className="app-build">跨境物品版 1126.2</p></div>
+            <div><h1>旅程準備助手</h1><p className="app-build">跨境物品版 1126.3</p></div>
           </div>
           <button type="button" className="app-tools-toggle" aria-expanded={toolsOpen} aria-controls="travel-tools" onClick={() => setToolsOpen(v => !v)}><i className="fa-solid fa-sliders" aria-hidden="true"></i><span>工具</span></button>
         </div>
@@ -110,8 +117,8 @@ function App() {
       {/* Main Content */}
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6">
         <div className="animate-fade-in-up">
-            <div hidden={activeTab !== Tab.GENERATOR}><GeneratorTab key={storageRevision} registerFlush={registerFlush} onStorageError={setStorageError} expenses={expenses} crossBorderItems={crossBorderItems} exchangeRates={exchangeRates} onShoppingChange={handleShoppingChange} onRatesChange={setExchangeRates} onCountryChange={setTripCountry} onNavigateToShopping={() => handleTabChange(Tab.SHOPPING)} /></div>
-            {activeTab === Tab.SHOPPING && <CrossBorderTab expenses={expenses} items={crossBorderItems} rates={exchangeRates}defaultDestination={tripCountry === 'JP' ? 'TW' : 'unknown'} onChange={setCrossBorderItems} />}
+            <div hidden={activeTab !== Tab.GENERATOR}><GeneratorTab key={storageRevision} registerFlush={registerFlush} onStorageError={setStorageError} expenses={expenses} crossBorderItems={crossBorderItems} exchangeRates={exchangeRates} onShoppingChange={handleShoppingChange} onRatesChange={setExchangeRates} onCountryChange={setTripCountry} onNavigateToShopping={() => handleTabChange(Tab.SHOPPING)} receiptRequest={receiptRequest} onReceiptRequestHandled={() => setReceiptRequest(null)} /></div>
+            {activeTab === Tab.SHOPPING && <CrossBorderTab expenses={expenses} items={crossBorderItems} rates={exchangeRates} defaultDestination={tripCountry === 'JP' ? 'TW' : 'unknown'} onChange={setCrossBorderItems} onReceiptCapture={async () => { await handleTabChange(Tab.GENERATOR); setReceiptRequest({ id: Date.now(), text: '' }); }} />}
             {activeTab === Tab.REGULATIONS && <div className="secondary-screen"><RegulationsTab /></div>}
             {activeTab === Tab.ADMIN && adminEnabled && <AdminDashboardTab />}
         </div>

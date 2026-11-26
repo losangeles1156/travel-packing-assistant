@@ -10,12 +10,13 @@ type RiskExpense = {
   linked: boolean;
 };
 
-export default function CrossBorderTab({ expenses, items, rates, defaultDestination, onChange }: {
+export default function CrossBorderTab({ expenses, items, rates, defaultDestination, onChange, onReceiptCapture }: {
   expenses: Expense[];
   items: CrossBorderItem[];
   rates: ExchangeRate[];
   defaultDestination: CrossBorderItem['destination'];
   onChange: (items: CrossBorderItem[]) => void;
+  onReceiptCapture: () => void;
 }) {
   const [draft, setDraft] = useState<CrossBorderItem>();
   const [notice, setNotice] = useState('');
@@ -74,6 +75,11 @@ export default function CrossBorderTab({ expenses, items, rates, defaultDestinat
   }
 
   return <div className="cross-border-tab">
+    <section className="receipt-capture-card" aria-labelledby="receipt-capture-title">
+      <i className="fa-solid fa-receipt" aria-hidden="true" />
+      <div><h2 id="receipt-capture-title">記一筆購物</h2><p>拍下收據、把文字分享給 App，自動記帳並檢查能不能帶回台灣。</p></div>
+      <button type="button" onClick={onReceiptCapture}><i className="fa-solid fa-camera" aria-hidden="true" /> 拍收據記帳</button>
+    </section>
     {hasProhibited && <div className="cb-prohibited-banner" role="alert">
       <i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />
       <div><strong>注意：消費紀錄中包含可能禁止攜帶入境的品項</strong>

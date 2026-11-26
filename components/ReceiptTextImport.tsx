@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
-import { applyReceiptDraft, parseReceiptText, type ReceiptForm } from '../domain/receiptText';
+import React, { useEffect, useRef, useState } from 'react';
+import { applyReceiptDraft, parseReceiptText, type ReceiptForm, type ReceiptRequest } from '../domain/receiptText';
 
 const missingLabels = { store: '店名', date: '日期', currency: '幣別', total: '合計金額' } as const;
 
-export default function ReceiptTextImport({ form, onApply }: { key?: string; form: ReceiptForm; onApply: (next: ReceiptForm) => void }) {
-  const [text, setText] = useState('');
+export default function ReceiptTextImport({ form, onApply, seed }: { key?: string; form: ReceiptForm; onApply: (next: ReceiptForm) => void; seed?: ReceiptRequest | null }) {
+  const [text, setText] = useState(seed?.text ?? '');
+  const [expanded, setExpanded] = useState(!!seed);
   const [result, setResult] = useState<{ lines: string[]; error?: boolean } | null>(null);
+  const panelRef = useRef<HTMLDetailsElement>(null);
 
-  const apply = () => {
-    if (!text.trim()) { setResult({ lines: ['請先貼上收據文字。'], error: true }); return; }
+  const apply = (source = text) => {
+    if (!source.trim()) { setResult({ lines: ['請先貼上收據文字。'], error: true }); return; }
     try {
-      const draft = parseReceiptText(text);
+      const draft = parseReceiptText(source);
       if (!draft.total && !draft.items.length && !draft.date && !draft.store) {
         setResult({ lines: ['沒有辨識到可用的內容，請確認貼上的是收據文字。'], error: true });
         return;
@@ -28,11 +30,25 @@ export default function ReceiptTextImport({ form, onApply }: { key?: string; for
     }
   };
 
-  return <details className="receipt-text">
-    <summary>貼上收據文字，自動填入</summary>
-    <p>先用手機內建的文字辨識（例如 Google 智慧鏡頭的「選取文字」）複製收據文字，再貼到這裡。文字只在這台裝置解析，不會上傳，也不會保存原文。</p>
+  useEffect(() => {
+    if (!seed) return;
+    if (seed.text) apply(seed.text);
+    requestAnimationFrame(() => {
+      panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      panelRef.current?.querySelector('summary')?.focus({ preventScroll: true });
+    });
+  }, []);
+
+  return <details ref={panelRef} className="receipt-text" open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
+    <summary><i className="fa-solid fa-camera" aria-hidden="true" /> 拍收據記帳</summary>
+    <ol className="receipt-steps">
+      <li>打開 Google 智慧鏡頭或相機的文字辨識，對準收據拍照。</li>
+      <li>選取文字後按「分享」，選「旅程準備」，會自動回到這裡並填好。</li>
+      <li>沒有「分享」可選時，改按「複製」，再貼到下方。</li>
+    </ol>
     <label>收據文字<textarea value={text} maxLength={10000} rows={6} onChange={event => { setText(event.target.value); setResult(null); }} /></label>
-    <button type="button" onClick={apply}>解析並填入</button>
+    <button type="button" onClick={() => apply()}>解析並填入</button>
+    <p className="receipt-text-note">文字只在這台裝置解析，不會保存原文。</p>
     {result && <div role={result.error ? 'alert' : 'status'} className={result.error ? 'receipt-text-error' : 'receipt-text-result'}>{result.lines.map(line => <p key={line}>{line}</p>)}</div>}
   </details>;
 }

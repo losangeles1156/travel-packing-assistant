@@ -19,6 +19,8 @@ export default defineConfig({
       description: '在本機記錄旅程準備及待確認事項',
       theme_color: '#205b53', background_color: '#f5f5ef', display: 'standalone',
       scope: '/', start_url: '/', lang: 'zh-TW',
+      // Lets Android list the installed app in the share sheet; param names must match SHARE_PARAMS in domain/receiptText.ts.
+      share_target: { action: '/', method: 'GET', params: { title: 'receipt_title', text: 'receipt_text', url: 'receipt_url' } },
       icons: [
         {src:'pwa-192x192.png',sizes:'192x192',type:'image/png'},
         {src:'pwa-512x512.png',sizes:'512x512',type:'image/png'},

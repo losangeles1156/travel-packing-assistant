@@ -1,8 +1,32 @@
+const MAX_SOURCE_LENGTH = 10000;
+export type ReceiptRequest = { id: number; text: string };
+// Must match share_target.params in vite.config.ts.
+export const SHARE_PARAMS = ['receipt_title', 'receipt_text', 'receipt_url'] as const;
+
+/** Splits text shared from the Android share sheet out of a query string; null when nothing was shared. */
+export function readSharedReceipt(search: string): { text: string; rest: string } | null {
+  const params = new URLSearchParams(search);
+  if (!SHARE_PARAMS.some(key => params.has(key))) return null;
+  const [title, body, url] = SHARE_PARAMS.map(key => params.get(key)?.trim() ?? '');
+  for (const key of SHARE_PARAMS) params.delete(key);
+  // Share titles are usually the source app's name, which would be misread as the store, so they only stand in for a missing body.
+  const text = body || [title, url].filter(Boolean).join('\n');
+  return { text: text.slice(0, MAX_SOURCE_LENGTH), rest: params.toString() };
+}
+
+/** Takes shared receipt text and removes it from the address bar so it does not linger in history. */
+export function takeSharedReceiptText(): string {
+  const shared = readSharedReceipt(window.location.search);
+  if (!shared) return '';
+  window.history.replaceState(window.history.state, '', `${window.location.pathname}${shared.rest ? `?${shared.rest}` : ''}${window.location.hash}`);
+  return shared.text;
+}
+
 export type ReceiptItem = { name: string; amount: string };
 export type ReceiptDraft = { store?: string; date?: string; currency?: string; total?: string; items: ReceiptItem[]; missing: ('store' | 'date' | 'currency' | 'total')[] };
 export type ReceiptForm = { title: string; amount: string; currency: string; date: string; note: string; category: string };
 
-const MAX_SOURCE = 10000;
+const MAX_SOURCE = MAX_SOURCE_LENGTH;
 const NOTE_LIMIT = 500;
 
 // "\" stands in for ¥ in many Japanese receipt fonts, so OCR often returns it.

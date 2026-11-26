@@ -30,6 +30,7 @@ import GuardianPanel from './GuardianPanel';
 import JourneyOverview from './JourneyOverview';
 import TripExpenses from './TripExpenses';
 import EmergencyCard from './EmergencyCard';
+import type { ReceiptRequest } from '../domain/receiptText';
 import { migrateExpenseItems, needsBorderReview, type CrossBorderItem, type Expense, type ExchangeRate } from '../domain/expenses';
 import PackingItemIcon from './PackingItemIcon';
 import TripDocuments from './TripDocuments';
@@ -43,10 +44,11 @@ import type { TravelProtection } from '../domain/travelProtection';
 import { emptyGuardian, initialRules, markChangedRules, markDocumentChanges, markScheduleChanges, type GuardianState } from '../domain/guardian';
 import { isValidTimeZone } from '../domain/timezone';
 
-type Props = { registerFlush: (flush: (() => Promise<void>) | null) => void; onStorageError: (message: string) => void; expenses: Expense[]; crossBorderItems: CrossBorderItem[]; exchangeRates: ExchangeRate[]; onShoppingChange: (expenses: Expense[], items: CrossBorderItem[]) => void; onRatesChange: (rates: ExchangeRate[]) => void; onCountryChange: (country: string) => void; onNavigateToShopping?: () => void };
-const GeneratorTab: React.FC<Props> = ({ registerFlush, onStorageError, expenses, crossBorderItems, exchangeRates, onShoppingChange, onRatesChange, onCountryChange, onNavigateToShopping }) => {
+type Props = { registerFlush: (flush: (() => Promise<void>) | null) => void; onStorageError: (message: string) => void; expenses: Expense[]; crossBorderItems: CrossBorderItem[]; exchangeRates: ExchangeRate[]; onShoppingChange: (expenses: Expense[], items: CrossBorderItem[]) => void; onRatesChange: (rates: ExchangeRate[]) => void; onCountryChange: (country: string) => void; onNavigateToShopping?: () => void; receiptRequest?: ReceiptRequest | null; onReceiptRequestHandled?: () => void };
+const GeneratorTab: React.FC<Props> = ({ registerFlush, onStorageError, expenses, crossBorderItems, exchangeRates, onShoppingChange, onRatesChange, onCountryChange, onNavigateToShopping, receiptRequest, onReceiptRequestHandled }) => {
   const [step, setStep] = useState<number>(0); // 0: Input, 1: Customize, 2: Result
   const [journeySection, setJourneySection] = useState<'overview' | 'packing'>('overview');
+  const [expenseReceipt, setExpenseReceipt] = useState<ReceiptRequest | null>(null);
   const [disruptionOpenRequest, setDisruptionOpenRequest] = useState(0);
   const [startError, setStartError] = useState<{field:'destination'|'start'|'end'; message:string} | null>(null);
   const [creating, setCreating] = useState(false);
@@ -442,6 +444,14 @@ const GeneratorTab: React.FC<Props> = ({ registerFlush, onStorageError, expenses
     return () => { window.removeEventListener('beforeunload', beforeUnload); document.removeEventListener('visibilitychange', onVisibility); };
   }, []);
 
+
+  useEffect(() => {
+    if (!receiptRequest || !activeListId || step === 0) return;
+    setStep(1);
+    setJourneySection('overview');
+    setExpenseReceipt(receiptRequest);
+    onReceiptRequestHandled?.();
+  }, [receiptRequest, activeListId, step]);
 
   const handleOpenRecentList = async (id: string) => {
     try {
@@ -980,6 +990,7 @@ const GeneratorTab: React.FC<Props> = ({ registerFlush, onStorageError, expenses
   if (step === 0) {
     return (
       <div className="new-trip max-w-lg mx-auto">
+        {receiptRequest && <div role="status" className="receipt-pending">{receiptRequest.text ? '已收到分享的收據文字。' : ''}請先選擇或建立旅程，接著會自動打開記帳。</div>}
         {listIndex.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 mb-6 overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
@@ -1270,7 +1281,7 @@ const GeneratorTab: React.FC<Props> = ({ registerFlush, onStorageError, expenses
       <div id="journey-disruptions" tabIndex={-1}><TripDisruptions key={`disruptions-${activeListId ?? 'new'}`} documents={documents} disruptions={disruptions} transportPlans={transportPlans} protection={travelProtection} expenses={expenses} onNavigate={area => { const target = document.getElementById(`journey-${area}`); target?.scrollIntoView({behavior:'smooth',block:'start'}); target?.focus({preventScroll:true}); }} openRequest={disruptionOpenRequest} onChange={next=>{setDisruptions(next);setGuardian(prev=>markDocumentChanges(prev,'flight'));}} /></div>
       <div id="journey-transport" tabIndex={-1}><TransportPlans key={`transport-${activeListId ?? 'new'}`} documents={documents} plans={transportPlans} onChange={next=>{setTransportPlans(next);setGuardian(prev=>markDocumentChanges(prev,'flight'));}} /></div>
       <div id="journey-protection" tabIndex={-1}><TravelProtectionPanel key={`protection-${activeListId ?? 'new'}`} value={travelProtection} disruptions={disruptions} onChange={next=>{setTravelProtection(next);setGuardian(prev=>prev.tasks.G2 ? {...prev,tasks:{...prev.tasks,G2:{...prev.tasks.G2,needsReview:true}}} : prev);}} /></div>
-      <div id="journey-expenses" tabIndex={-1}><TripExpenses key={`expenses-${activeListId ?? 'new'}`} expenses={expenses} disruptions={disruptions} rates={exchangeRates} onRatesChange={onRatesChange} items={crossBorderItems} defaultDestination={tripCountry === 'JP' ? 'TW' : 'unknown'} onChange={(newExpenses,newItems)=>onShoppingChange(newExpenses,newItems)} /></div>
+      <div id="journey-expenses" tabIndex={-1}><TripExpenses key={`expenses-${activeListId ?? 'new'}`} expenses={expenses} disruptions={disruptions} rates={exchangeRates} onRatesChange={onRatesChange} items={crossBorderItems} defaultDestination={tripCountry === 'JP' ? 'TW' : 'unknown'} receiptRequest={expenseReceipt} onChange={(newExpenses,newItems)=>onShoppingChange(newExpenses,newItems)} /></div>
       <div id="journey-checks" tabIndex={-1}><GuardianPanel suggestions={{
         destination,
         device: travelProtection?.device || '',
