@@ -35,3 +35,27 @@ test('saving an expense with fresh produce or meat warns right away',async({page
  await alert.getByRole('button',{name:'加入跨境檢核'}).click();await expect(alert).toHaveCount(0);
  await page.getByRole('button',{name:'旅遊記帳'}).click();const list=page.getByRole('main');await expect(list.getByText('1 件待確認')).toBeVisible();await expect(list.getByRole('button',{name:'加入檢核'})).toHaveCount(0);
 });
+
+test('pasted receipt text fills an expense draft locally and keeps typed values',async({page})=>{
+ await page.goto('/');await page.getByLabel('目的地').fill('收據測試');await page.getByRole('button',{name:'建立旅程'}).click();
+ const area=page.getByRole('region',{name:'旅途記帳'});
+ await area.getByRole('button',{name:'＋ 新增支出'}).click();
+ await area.getByLabel('金額').fill('5000');
+ await area.getByText('貼上收據文字，自動填入').click();
+ await area.getByLabel('收據文字').fill('ファミリーマート 新宿東口店\n2026年11月25日 14:32\n和牛 切り落とし ￥３，２８０※\nいちご 1パック ￥９８０※\n合計 ¥4,260\nお預り ¥5,000');
+ await area.getByRole('button',{name:'解析並填入'}).click();
+ const result=area.getByRole('status').filter({hasText:'已填入'});
+ await expect(result).toContainText('已填入：名稱、日期、品項（辨識到 2 個品項）');
+ await expect(result).toContainText('保留你已填的：金額、幣別');
+ await expect(area.getByLabel('支出名稱')).toHaveValue('ファミリーマート 新宿東口店');
+ await expect(area.getByLabel('金額')).toHaveValue('5000');
+ await expect(area.getByLabel('日期（選填）')).toHaveValue('2026-11-25');
+ await expect(area.getByLabel('備註（選填）')).toHaveValue('品項：和牛 切り落とし、いちご 1パック');
+ await area.getByLabel('金額').fill('');await area.getByRole('button',{name:'解析並填入'}).click();
+ await expect(area.getByLabel('金額')).toHaveValue('4260');await expect(area.getByLabel('幣別（三碼）')).toHaveValue('JPY');
+ await expect(area.getByLabel('備註（選填）')).toHaveValue('品項：和牛 切り落とし、いちご 1パック');
+ await area.getByRole('button',{name:'儲存支出'}).click();
+ const alert=area.locator('.expense-risk-alert');await expect(alert).toContainText('動物產品');await expect(alert).toContainText('植物及農產品');
+ await area.getByRole('button',{name:'＋ 新增支出'}).click();await area.getByText('貼上收據文字，自動填入').click();
+ await area.getByRole('button',{name:'解析並填入'}).click();await expect(area.getByRole('alert').filter({hasText:'請先貼上收據文字'})).toBeVisible();
+});
