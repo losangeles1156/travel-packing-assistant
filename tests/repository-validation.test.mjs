@@ -32,7 +32,7 @@ test('invalid nested data and duplicate IDs are rejected before import', () => {
  assert.throws(()=>normalizeBackup({format:'travel-packing-legacy-backup',version:1,exportedAt:backup.exportedAt,count:1,data:{tpa_list_v1_wrong:JSON.stringify(list)}}));
 });
 test('a blocked upgrade rejects and aborts a later upgrade attempt',async()=>{const {ListRepository}=await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);let request,aborted=false,created=0;globalThis.indexedDB={open(){request={result:{objectStoreNames:{contains:()=>false},createObjectStore:()=>{created++},close:()=>{}},transaction:{abort:()=>{aborted=true}}};queueMicrotask(()=>request.onblocked());return request}};await assert.rejects(()=>new ListRepository('test').getAll(),/升級受阻/);request.onupgradeneeded();assert.equal(aborted,true);assert.equal(created,0);delete globalThis.indexedDB;});
-test('backup reader accepts v1 through v11, emits v11, and rejects future versions',()=>{for (const version of [1,2,3,4,5,6,7,8,9,10,11]) assert.equal(validateBackup({...backup,version}).version,11);assert.throws(()=>validateBackup({...backup,version:12}),/版本不相容/);assert.throws(()=>validateBackup({...backup,lists:[{...list,documents:[]}]}),/版本/);assert.throws(()=>validateBackup({...backup,version:3,lists:[{...list,disruptions:[]}]}),/版本/);});
+test('backup reader accepts v1 through v12, emits v12, and rejects future versions',()=>{for (const version of [1,2,3,4,5,6,7,8,9,10,11,12]) assert.equal(validateBackup({...backup,version}).version,12);assert.throws(()=>validateBackup({...backup,version:13}),/版本不相容/);assert.throws(()=>validateBackup({...backup,lists:[{...list,documents:[]}]}),/版本/);assert.throws(()=>validateBackup({...backup,version:3,lists:[{...list,disruptions:[]}]}),/版本/);});
 test('legacy missing region needs explicit correction without changing original data',()=>{
  const legacy = {...list,trip:{...list.trip}}; delete legacy.trip.country; delete legacy.trip.direction;
  const bytes=JSON.stringify(legacy); const storage={length:1,key:()=> 'tpa_list_v1_one',getItem:()=>bytes};
@@ -114,4 +114,13 @@ test('cross-border backup validates independent items, links and supported packa
  for(const items of [[item,item],[{...item,expenseId:'missing'}],[{...item,packageImage:'data:image/svg+xml;base64,AAAA'}]]) {
   assert.throws(()=>validateBackup({...backup,version:11,lists:[{...snapshot,crossBorderItems:items}]}));
  }
+});
+test('booking references require backup v12 while older documents without one still restore',()=>{
+ const doc={id:'d1',kind:'flight',source:'manual',createdAt:'2026-11-09T00:00:00Z',updatedAt:'2026-11-09T00:00:00Z',title:'航空',flightNumber:'',from:'',to:'',startDate:'',startTime:'',startZone:'',endDate:'',endTime:'',endZone:'',address:'',contact:''};
+ const old={...list,documents:[doc]};const withRef={...list,documents:[{...doc,reference:'HX7Q2P'}]};
+ assert.deepEqual(validateBackup({...backup,version:11,lists:[old]}).lists,[old]);
+ assert.equal(validateBackup({...backup,version:11,lists:[old]}).version,12);
+ assert.deepEqual(validateBackup({...backup,version:12,lists:[withRef]}).lists,[withRef]);
+ assert.throws(()=>validateBackup({...backup,version:11,lists:[withRef]}),/訂位代號/);
+ assert.throws(()=>validateBackup({...backup,version:13,lists:[old]}));
 });

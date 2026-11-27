@@ -11,7 +11,7 @@ export default function TripDocuments({ documents, onChange }: { key?: string; d
   const [notice, setNotice] = useState('');
   const [scenario, setScenario] = useState<{id: string; kind: DisruptionKind} | null>(null);
   const start = (next: DocumentKind, doc?: TripDocument) => {
-    setKind(next); setEditing(doc?.id ?? null); setFields(doc ? { title:doc.title,flightNumber:doc.flightNumber,from:doc.from,to:doc.to,startDate:doc.startDate,startTime:doc.startTime,startZone:doc.startZone,endDate:doc.endDate,endTime:doc.endTime,endZone:doc.endZone,address:doc.address,contact:doc.contact } : emptyDocumentFields());
+    setKind(next); setEditing(doc?.id ?? null); setFields(doc ? { title:doc.title,flightNumber:doc.flightNumber,from:doc.from,to:doc.to,startDate:doc.startDate,startTime:doc.startTime,startZone:doc.startZone,endDate:doc.endDate,endTime:doc.endTime,endZone:doc.endZone,address:doc.address,contact:doc.contact,reference:doc.reference ?? '' } : emptyDocumentFields());
     setSource(doc?.source ?? 'manual'); setText(''); setNotice('');
   };
   const save = () => {
@@ -29,16 +29,16 @@ export default function TripDocuments({ documents, onChange }: { key?: string; d
   };
   const remove = (doc: TripDocument) => { if (window.confirm(`確定刪除「${doc.title}」？`)) { onChange(documents.filter(d => d.id !== doc.id),doc.kind); setNotice('已刪除該筆資料，請等待保存完成。'); } };
   const labels: {key:keyof DocumentFields;label:string;type?:string}[] = kind === 'flight' ? [
-    {key:'title',label:'航空公司或航班名稱'}, {key:'flightNumber',label:'航班號碼（選填）'}, {key:'from',label:'出發機場'}, {key:'to',label:'抵達機場'},
+    {key:'title',label:'航空公司或航班名稱'}, {key:'flightNumber',label:'航班號碼（選填）'}, {key:'reference',label:'訂位代號（選填）'}, {key:'from',label:'出發機場'}, {key:'to',label:'抵達機場'},
     {key:'startDate',label:'出發日期',type:'date'}, {key:'startTime',label:'出發時間',type:'time'}, {key:'startZone',label:'出發時區（選填）'},
     {key:'endDate',label:'抵達日期',type:'date'}, {key:'endTime',label:'抵達時間',type:'time'}, {key:'endZone',label:'抵達時區（選填）'},
-  ] : [ {key:'title',label:'住宿名稱'}, {key:'address',label:'住宿地址'}, {key:'contact',label:'聯絡方式（選填）'},
+  ] : [ {key:'title',label:'住宿名稱'}, {key:'address',label:'住宿地址'}, {key:'contact',label:'聯絡方式（選填）'}, {key:'reference',label:'訂房編號（選填）'},
     {key:'startDate',label:'入住日期',type:'date'}, {key:'startTime',label:'入住時間（選填）',type:'time'}, {key:'startZone',label:'入住時區（選填）'},
     {key:'endDate',label:'退房日期',type:'date'}, {key:'endTime',label:'退房時間（選填）',type:'time'}, {key:'endZone',label:'退房時區（選填）'} ];
   return <section className="trip-documents" aria-label="航班與住宿">
     <div className="trip-documents-heading"><div><h2>航班與住宿</h2><p>把旅程重要資訊放在一起，隨時查看。</p></div></div>
     {documents.length === 0 ? <p className="trip-documents-empty">還沒有記錄航班或住宿。</p> : <div className="trip-document-list">{documents.map(doc => <article className="trip-document-card" key={doc.id}>
-      <div><span className="trip-document-type">{doc.kind === 'flight' ? '航班' : '住宿'}</span><h3>{doc.title}{doc.kind === 'flight' && doc.flightNumber ? ` ${doc.flightNumber}` : ''}</h3><p>{doc.kind === 'flight' ? [doc.from,doc.to].filter(Boolean).join(' → ') || '機場待補充' : doc.address || '地址待補充'}</p><p>{doc.startDate || '日期待補充'}{doc.startTime ? ` ${doc.startTime}` : ''}{doc.endDate ? ` → ${doc.endDate}` : ''}</p><p className="trip-document-meta">{doc.source === 'pasted' ? '文字擷取後由你確認' : '由你記錄'} · 非即時資訊</p></div>
+      <div><span className="trip-document-type">{doc.kind === 'flight' ? '航班' : '住宿'}</span><h3>{doc.title}{doc.kind === 'flight' && doc.flightNumber ? ` ${doc.flightNumber}` : ''}</h3><p>{doc.kind === 'flight' ? [doc.from,doc.to].filter(Boolean).join(' → ') || '機場待補充' : doc.address || '地址待補充'}</p><p>{doc.startDate || '日期待補充'}{doc.startTime ? ` ${doc.startTime}` : ''}{doc.endDate ? ` → ${doc.endDate}` : ''}</p>{doc.reference && <p>{doc.kind === 'flight' ? '訂位代號' : '訂房編號'}：<span className="booking-reference">{doc.reference}</span></p>}<p className="trip-document-meta">{doc.source === 'pasted' ? '文字擷取後由你確認' : '由你記錄'} · 非即時資訊</p></div>
       <details><summary>查看詳細資訊</summary><p>{doc.kind === 'flight' ? '出發' : '入住'}：{[doc.startDate, doc.startTime, doc.startZone || '時區未填'].filter(Boolean).join(' ')}</p><p>{doc.kind === 'flight' ? '抵達' : '退房'}：{[doc.endDate, doc.endTime, doc.endZone || '時區未填'].filter(Boolean).join(' ')}</p>{doc.contact && <p>聯絡方式：{doc.contact}</p>}</details>
       <div className="trip-document-actions"><button type="button" aria-label={`編輯 ${doc.title}`} onClick={()=>start(doc.kind,doc)}>編輯</button><button type="button" aria-label={`刪除 ${doc.title}`} onClick={()=>remove(doc)}>刪除</button></div>
       {doc.kind === 'flight' && <details><summary>航班有變動時怎麼辦？</summary><p>選擇情境查看準備方向；這不是航班即時狀態，也不會替你記錄變動。</p><div className="trip-document-add"><button type="button" aria-pressed={scenario?.id === doc.id && scenario.kind === 'delay'} onClick={()=>setScenario({id:doc.id,kind:'delay'})}>航班延誤</button><button type="button" aria-pressed={scenario?.id === doc.id && scenario.kind === 'cancellation'} onClick={()=>setScenario({id:doc.id,kind:'cancellation'})}>航班取消</button></div>{scenario?.id === doc.id && <div aria-live="polite">{disruptionGuidance(scenario.kind,documents).map(item=><p key={item.title}><strong>{item.title}：</strong>{item.action}</p>)}</div>}</details>}

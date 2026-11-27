@@ -71,7 +71,7 @@ test('legacy migration preserves newer records and a newer database refuses down
       const marker = await invalid.isMigrated();
       const future = `${base}-future`;
       await new Promise((resolve, reject) => {
-        const request = indexedDB.open(future, 17);
+        const request = indexedDB.open(future, 18);
         request.onsuccess = () => { request.result.close(); resolve(); };
         request.onerror = () => reject(request.error);
       });

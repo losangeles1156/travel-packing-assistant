@@ -75,7 +75,7 @@ test('flight and lodging records require confirmation and survive backup restore
   await backup.locator('summary').click();
   const [download]=await Promise.all([page.waitForEvent('download'),backup.getByRole('button',{name:'下載備份',exact:true}).click()]);
   const path=await download.path(); const raw=await fs.readFile(path,'utf8');
-  expect(JSON.parse(raw).version).toBe(11); expect(raw).not.toContain('SYNTHETIC_SECRET');
+  expect(JSON.parse(raw).version).toBe(12); expect(raw).not.toContain('SYNTHETIC_SECRET');
   page.once('dialog',dialog=>dialog.accept());
   await backup.getByRole('button',{name:'刪除全部本機資料'}).click();
   await expect(backup.getByText('清單與對應舊版副本已刪除',{exact:false})).toBeVisible();

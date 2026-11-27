@@ -8,12 +8,12 @@ import { isTravelProtection } from '../domain/travelProtection';
 import type { ListSnapshot } from '../services/listStorageService';
 
 const DB_NAME = 'journey-guardian';
-const VERSION = 16;
+const VERSION = 17;
 const META_STORE = 'meta';
 const MIGRATED_KEY = 'legacy-migration-v1';
 const STORE = 'lists';
 
-export type ListBackup = { format: 'journey-guardian-lists'; version: 11; exportedAt: string; count: number; lists: ListSnapshot[] };
+export type ListBackup = { format: 'journey-guardian-lists'; version: 12; exportedAt: string; count: number; lists: ListSnapshot[] };
 
 /** In-memory comparison token only; never logged or persisted. */
 function snapshotToken(lists: ListSnapshot[]): string {
@@ -73,7 +73,7 @@ export function validateBackup(value: unknown): ListBackup {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('備份格式不正確');
   const v = value as Omit<Partial<ListBackup>, 'version'> & {version?: unknown};
   const version = v.version;
-  if (v.format !== 'journey-guardian-lists' || typeof version !== 'number' || !Number.isInteger(version) || version < 1 || version > 11 || typeof v.exportedAt !== 'string' || !Number.isFinite(Date.parse(v.exportedAt)) || !Array.isArray(v.lists) || v.count !== v.lists.length || !v.lists.every(validateList)) throw new Error('備份資料損壞或版本不相容');
+  if (v.format !== 'journey-guardian-lists' || typeof version !== 'number' || !Number.isInteger(version) || version < 1 || version > 12 || typeof v.exportedAt !== 'string' || !Number.isFinite(Date.parse(v.exportedAt)) || !Array.isArray(v.lists) || v.count !== v.lists.length || !v.lists.every(validateList)) throw new Error('備份資料損壞或版本不相容');
   if (version < 3 && v.lists.some(list => list.documents !== undefined)) throw new Error('備份版本與旅程資料不相容');
   if (version < 4 && v.lists.some(list => list.disruptions !== undefined || list.transportPlans !== undefined)) throw new Error('備份版本與旅程變動資料不相容');
   if (version < 5 && v.lists.some(list => list.travelProtection !== undefined)) throw new Error('備份版本與旅程守護資料不相容');
@@ -83,8 +83,9 @@ export function validateBackup(value: unknown): ListBackup {
   if (version < 9 && v.lists.some(list => list.exchangeRates !== undefined)) throw new Error('備份版本與手動匯率資料不相容');
   if (version < 10 && v.lists.some(list => list.expenses?.some(expense => expense.receiptImage !== undefined))) throw new Error('備份版本與單據影像不相容');
   if (version < 11 && v.lists.some(list=>list.crossBorderItems !== undefined)) throw new Error('備份版本與跨境物品資料不相容');
+  if (version < 12 && v.lists.some(list => list.documents?.some(doc => doc.reference !== undefined))) throw new Error('備份版本與訂位代號資料不相容');
   if (new Set(v.lists.map(x => x.id)).size !== v.lists.length) throw new Error('備份包含重複的清單識別碼');
-  return { ...v, version: 11, lists: v.lists.map(withMigratedExpenseItems) } as ListBackup;
+  return { ...v, version: 12, lists: v.lists.map(withMigratedExpenseItems) } as ListBackup;
 }
 
 function withMigratedExpenseItems(list: ListSnapshot): ListSnapshot {
@@ -223,7 +224,7 @@ export class ListRepository {
   }
   async backup(now = new Date()): Promise<ListBackup> {
     const lists = await this.getAll();
-    return { format: 'journey-guardian-lists', version: 11, exportedAt: now.toISOString(), count: lists.length, lists: lists.map(withMigratedExpenseItems) };
+    return { format: 'journey-guardian-lists', version: 12, exportedAt: now.toISOString(), count: lists.length, lists: lists.map(withMigratedExpenseItems) };
   }
   async previewImport(value: unknown, corrections: LegacyCorrections = {}) {
     const backup = normalizeBackup(value, corrections);

@@ -3,15 +3,19 @@ export type TripDocument = {
   id: string; kind: DocumentKind; createdAt: string; updatedAt: string; source: 'manual' | 'pasted';
   title: string; flightNumber: string; from: string; to: string; startDate: string; startTime: string; startZone: string;
   endDate: string; endTime: string; endZone: string; address: string; contact: string;
+  /** Added in backup v12; records saved earlier have no reference. */
+  reference?: string;
 };
 export type DocumentFields = Omit<TripDocument, 'id' | 'kind' | 'createdAt' | 'updatedAt' | 'source'>;
-export const emptyDocumentFields = (): DocumentFields => ({ title:'', flightNumber:'', from:'', to:'', startDate:'', startTime:'', startZone:'', endDate:'', endTime:'', endZone:'', address:'', contact:'' });
+export const emptyDocumentFields = (): DocumentFields => ({ title:'', flightNumber:'', from:'', to:'', startDate:'', startTime:'', startZone:'', endDate:'', endTime:'', endZone:'', address:'', contact:'', reference:'' });
 const fieldKeys = Object.keys(emptyDocumentFields()) as (keyof DocumentFields)[];
+const validField = (key: keyof DocumentFields, value: unknown) => key === 'reference' && value === undefined ? true : typeof value === 'string' && value.length <= 300;
 const validDay = (s: string) => !s || (/^\d{4}-\d{2}-\d{2}$/.test(s) && Number.isFinite(Date.parse(`${s}T00:00:00Z`)) && new Date(`${s}T00:00:00Z`).toISOString().slice(0,10) === s);
 const validTime = (s: string) => !s || /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
 const validZone = (s: string) => { if (!s) return true; try { new Intl.DateTimeFormat('en', {timeZone:s}); return true; } catch { return false; } };
 export function documentError(kind: DocumentKind, fields: DocumentFields): string {
-  if (fieldKeys.some(k => typeof fields[k] !== 'string' || fields[k].length > 300)) return '欄位內容過長或格式不正確。';
+  if (fieldKeys.some(k => !validField(k, fields[k]))) return '欄位內容過長或格式不正確。';
+  if ((fields.reference ?? '').length > 40) return '訂位代號最多 40 字。';
   if (!fields.title.trim()) return kind === 'flight' ? '請輸入航空公司或航班名稱。' : '請輸入住宿名稱。';
   if (!validDay(fields.startDate) || !validDay(fields.endDate)) return '請確認日期格式。';
   if (!validTime(fields.startTime) || !validTime(fields.endTime)) return '請確認時間格式。';
@@ -22,9 +26,9 @@ export function documentError(kind: DocumentKind, fields: DocumentFields): strin
 export function isTripDocument(value: unknown): value is TripDocument {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const v = value as TripDocument;
-  return typeof v.id === 'string' && v.id.length > 0 && v.id.length <= 200 && (v.kind === 'flight' || v.kind === 'lodging') && (v.source === 'manual' || v.source === 'pasted') && typeof v.createdAt === 'string' && Number.isFinite(Date.parse(v.createdAt)) && typeof v.updatedAt === 'string' && Number.isFinite(Date.parse(v.updatedAt)) && fieldKeys.every(key => typeof v[key] === 'string') && !documentError(v.kind, v);
+  return typeof v.id === 'string' && v.id.length > 0 && v.id.length <= 200 && (v.kind === 'flight' || v.kind === 'lodging') && (v.source === 'manual' || v.source === 'pasted') && typeof v.createdAt === 'string' && Number.isFinite(Date.parse(v.createdAt)) && typeof v.updatedAt === 'string' && Number.isFinite(Date.parse(v.updatedAt)) && fieldKeys.every(key => validField(key, v[key])) && !documentError(v.kind, v);
 }
-/** Only explicit labelled lines are copied; no dates, locations or times are guessed. */
+/** Only explicit labelled lines are copied; no dates, locations or times are guessed. Booking references are never extracted: with a surname they unlock the booking. */
 export function parseDocumentText(kind: DocumentKind, text: string): DocumentFields {
   if (text.length > 10000) throw new Error('文字超過 10,000 字，請縮短後再試。');
   const result = emptyDocumentFields();

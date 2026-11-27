@@ -33,6 +33,18 @@ export const tollFreeHotline: Partial<Record<EmergencyCountry, { numbers: { labe
 // 外交部領事事務局「在海外遭遇急難的應對方式」，2026-11-25 查閱。
 export const emergencyGuideUrl = 'https://www.boca.gov.tw/cp-278-4447-9c49d-1.html';
 
+export type LocalEmergency = { lines: { label: string; phone: Phone; note?: string }[]; source: { label: string; url: string } };
+const local = (label: string, display: string, note?: string) => ({ label, phone: { display, tel: (display.startsWith('+') ? '+' : '') + display.replace(/\D/g, '') }, note });
+// Each country's numbers come from that government's or national tourism body's own page, read on 2026-11-27.
+export const LOCAL_EMERGENCY_CHECKED_ON = '2026-11-27';
+export const localEmergency: Record<EmergencyCountry, LocalEmergency> = {
+  JP: { lines: [local('報警', '110'), local('消防、救護車', '119'), local('日本觀光客服熱線', '+81-50-3816-2787', '24 小時；日本門號可撥 050-3816-2787')], source: { label: '日本國家旅遊局應急指南', url: 'https://www.jnto.go.jp/emergency/chc/mi_guide.html' } },
+  KR: { lines: [local('報警', '112'), local('消防、救護車', '119'), local('韓國旅遊諮詢熱線', '+82-2-1330')], source: { label: '韓國觀光公社 Emergency Situations', url: 'https://english.visitkorea.or.kr/svc/contents/contentsView.do?vcontsId=140042' } },
+  SG: { lines: [local('報警', '999'), local('救護車、消防', '995')], source: { label: '新加坡政府 Contact Us', url: 'https://www.gov.sg/contact-us/' } },
+  TH: { lines: [local('緊急報案（警察，各種緊急事件）', '191'), local('醫療急救', '1669'), local('觀光警察', '1155')], source: { label: '泰國政府 Tourist Assistance Contact Numbers', url: 'https://thailand.go.th/issue-focus-detail/essential-tourist-assistance-contact-numbers-to-ensure-a-smooth-and-safe-journey' } },
+  VN: { lines: [local('報警', '113'), local('消防、救援', '114'), local('醫療急救', '115'), local('全國緊急救難總機', '112', '天災、海難等')], source: { label: '越南電奠省公安：全國緊急電話', url: 'https://congan.dienbien.gov.vn/Danh-muc-tin-tuc/tong-hop-cac-so-dien-thoai-khan-cap-quoc-gia-ghi-nho-de-bao-ve-minh-va-ho-tro-nguoi-khac-13182.html' } },
+};
+
 /** Offices whose jurisdiction names appear in the trip text come first; with no match, every office in the country is relevant. */
 export function officesForTrip(country: string, tripText: string) {
   const inCountry = consularOffices.filter(item => item.country === country);

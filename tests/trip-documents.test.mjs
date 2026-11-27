@@ -10,3 +10,11 @@ test('ambiguous and invalid values are left blank for confirmation',()=>{const f
 test('missing timezone is allowed but invalid timezone and reversed lodging dates are rejected',()=>{const fields={...emptyDocumentFields(),title:'測試住宿',startDate:'2026-12-01',endDate:'2026-12-02'};assert.equal(documentError('lodging',fields),'');assert.match(documentError('lodging',{...fields,startZone:'bad/zone'}),/時區/);assert.match(documentError('lodging',{...fields,endDate:'2026-11-30'}),/退房/);});
 test('malformed and oversized records are rejected without throwing',()=>{const doc={...emptyDocumentFields(),id:'x',kind:'flight',source:'manual',createdAt:'2026-11-09T00:00:00Z',updatedAt:'2026-11-09T00:00:00Z',title:'航空'};assert.equal(isTripDocument(doc),true);assert.equal(isTripDocument({...doc,title:123}),false);assert.equal(isTripDocument({...doc,address:'x'.repeat(301)}),false);});
 test('pasted content length is bounded',()=>{assert.throws(()=>parseDocumentText('flight','x'.repeat(10001)),/10,000/);});
+test('booking reference is optional for records saved before it existed and is length-limited',()=>{
+ const base={...emptyDocumentFields(),id:'x',kind:'lodging',source:'manual',createdAt:'2026-11-09T00:00:00Z',updatedAt:'2026-11-09T00:00:00Z',title:'旅館'};
+ const {reference:_,...old}=base;assert.equal(isTripDocument(old),true);
+ assert.equal(isTripDocument({...base,reference:'HX7Q2P'}),true);
+ assert.equal(isTripDocument({...base,reference:42}),false);
+ assert.match(documentError('lodging',{...base,reference:'A'.repeat(41)}),/40/);assert.equal(isTripDocument({...base,reference:'A'.repeat(41)}),false);
+});
+test('booking references are never extracted from pasted order text',()=>{const fields=parseDocumentText('lodging','住宿名稱：測試旅館\n訂房編號：BOOK123\n予約番号：987654');assert.equal(fields.title,'測試旅館');assert.equal(fields.reference,'');assert.equal(JSON.stringify(fields).includes('BOOK123'),false);});

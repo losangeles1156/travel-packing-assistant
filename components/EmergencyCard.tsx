@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import type { TripDocument } from '../domain/tripDocuments';
 import type { TravelProtection } from '../domain/travelProtection';
-import { EMERGENCY_CHECKED_ON, emergencyGuideUrl, findPhone, mofaHotline, officesForTrip, tollFreeHotline, type ConsularOffice } from '../domain/emergencyContacts';
+import { EMERGENCY_CHECKED_ON, LOCAL_EMERGENCY_CHECKED_ON, emergencyGuideUrl, findPhone, localEmergency, mofaHotline, officesForTrip, tollFreeHotline, type ConsularOffice } from '../domain/emergencyContacts';
 
 function Contact({ text, label }: { text: string; label: string }) {
   const found = findPhone(text);
@@ -31,10 +31,20 @@ export default function EmergencyCard({ country, destination, documents, protect
   const flights = documents.filter(doc => doc.kind === 'flight').sort(byDate);
   const offices = officesForTrip(country, [destination, ...stays.map(stay => stay.address)].join(' '));
   const tollFree = tollFreeHotline[country as keyof typeof tollFreeHotline];
+  const localNumbers = localEmergency[country as keyof typeof localEmergency];
   const showDriver = (stay: TripDocument) => { setDriverStay(stay); requestAnimationFrame(() => dialogRef.current?.showModal()); };
 
   return <section className="trip-documents emergency-card" aria-labelledby="emergency-title">
     <div className="trip-documents-heading"><div><h2 id="emergency-title"><i className="fa-solid fa-kit-medical" aria-hidden="true" /> 緊急資訊卡</h2><p>資料存在這台裝置，離線也能查看。遇到狀況時先看這裡。</p></div></div>
+
+    <div className="emergency-block emergency-local">
+      <h3>當地緊急電話</h3>
+      {localNumbers ? <ul>{localNumbers.lines.map(line => <li key={line.label}>
+        <strong>{line.label}</strong>
+        <a className="emergency-call" href={`tel:${line.phone.tel}`} aria-label={`撥打${line.label} ${line.phone.display}`}>撥打 {line.phone.display}</a>
+        {line.note && <small>{line.note}</small>}
+      </li>)}</ul> : <p>目前只收錄日本、韓國、新加坡、泰國、越南的當地緊急電話，其他地區請查當地政府公告。</p>}
+    </div>
 
     <div className="emergency-block">
       <h3>住宿</h3>
@@ -43,6 +53,7 @@ export default function EmergencyCard({ country, destination, documents, protect
         {stay.startDate && <small>{stay.startDate}{stay.endDate ? ` – ${stay.endDate}` : ''}</small>}
         {stay.address ? <p className="emergency-address">{stay.address}</p> : <p>地址未記錄，建議填當地文字地址，方便給司機看。</p>}
         {stay.contact && <Contact text={stay.contact} label={stay.title} />}
+        {stay.reference && <p>訂房編號：<span className="booking-reference">{stay.reference}</span></p>}
         {stay.address && <button type="button" onClick={() => showDriver(stay)} aria-label={`把「${stay.title}」地址放大給司機看`}>放大給司機看</button>}
       </li>)}</ul> : <p>尚未記錄住宿。<button type="button" className="emergency-link" onClick={() => onEdit('documents')}>新增住宿</button></p>}
     </div>
@@ -52,6 +63,7 @@ export default function EmergencyCard({ country, destination, documents, protect
       {flights.length ? <ul>{flights.map(flight => <li key={flight.id}>
         <strong>{flight.title}{flight.flightNumber ? ` ${flight.flightNumber}` : ''}</strong>
         <small>{[flight.startDate, flight.startTime].filter(Boolean).join(' ') || '時間未記錄'}{(flight.from || flight.to) ? ` · ${flight.from || '出發地未記錄'} → ${flight.to || '抵達地未記錄'}` : ''}</small>
+        {flight.reference && <p>訂位代號：<span className="booking-reference">{flight.reference}</span></p>}
       </li>)}</ul> : <p>尚未記錄航班。<button type="button" className="emergency-link" onClick={() => onEdit('documents')}>新增航班</button></p>}
     </div>
 
@@ -82,7 +94,7 @@ export default function EmergencyCard({ country, destination, documents, protect
         : country === 'VN' ? <p>越南目前不適用外交部全球免付費專線。</p> : null}
     </div>
 
-    <p className="emergency-note">館處與專線電話依外交部領事事務局公告整理（{EMERGENCY_CHECKED_ON} 查閱），可能異動：<a href={offices.primary[0]?.url ?? mofaHotline.url} target="_blank" rel="noopener noreferrer">館處聯絡資訊</a>、<a href={mofaHotline.url} target="_blank" rel="noopener noreferrer">急難救助專線</a>、<a href={emergencyGuideUrl} target="_blank" rel="noopener noreferrer">海外急難應對方式</a>。</p>
+    <p className="emergency-note">館處與專線電話依外交部領事事務局公告整理（{EMERGENCY_CHECKED_ON} 查閱），可能異動：<a href={offices.primary[0]?.url ?? mofaHotline.url} target="_blank" rel="noopener noreferrer">館處聯絡資訊</a>、<a href={mofaHotline.url} target="_blank" rel="noopener noreferrer">急難救助專線</a>、<a href={emergencyGuideUrl} target="_blank" rel="noopener noreferrer">海外急難應對方式</a>。{localNumbers && <> 當地緊急電話依<a href={localNumbers.source.url} target="_blank" rel="noopener noreferrer">{localNumbers.source.label}</a>（{LOCAL_EMERGENCY_CHECKED_ON} 查閱）。</>}</p>
 
     <dialog ref={dialogRef} className="driver-dialog" aria-labelledby="driver-title" onClose={() => setDriverStay(null)}>
       {driverStay && <>
