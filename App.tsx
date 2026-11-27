@@ -102,7 +102,7 @@ function App() {
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="app-brand flex items-center gap-3">
             <div className="app-brand-mark"><i className="fa-solid fa-plane-departure" aria-hidden="true"></i></div>
-            <div><h1>旅程準備助手</h1><p className="app-build">跨境物品版 1126.3</p></div>
+            <div><h1>旅程準備助手</h1><p className="app-build">跨境物品版 1127.1</p></div>
           </div>
           <button type="button" className="app-tools-toggle" aria-expanded={toolsOpen} aria-controls="travel-tools" onClick={() => setToolsOpen(v => !v)}><i className="fa-solid fa-sliders" aria-hidden="true"></i><span>工具</span></button>
         </div>
