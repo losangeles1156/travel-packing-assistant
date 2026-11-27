@@ -1,0 +1,10 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';
+const compile=p=>ts.transpileModule(fs.readFileSync(new URL(p,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const date=`data:text/javascript;base64,${Buffer.from(compile('../utils/date.ts')).toString('base64')}`;
+const js=compile('../domain/departure.ts').replace('../utils/date',date);
+const {calculateDepartureReference:calc}=await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+const base={flightDate:'2026-11-15',flightTime:'10:00',flightZone:'Asia/Tokyo',departureZone:'Asia/Tokyo',travelMinutes:90,bufferMinutes:120};
+test('computes a transparent local reference with explicit buffer',()=>{const r=calc(base);assert.equal(r.leaveLocal,'2026-11-15 06:30');assert.equal(r.flightInstant,'2026-11-15T01:00:00.000Z')});
+test('handles departure and flight in different time zones and previous day',()=>{const r=calc({...base,flightTime:'01:00',departureZone:'Asia/Taipei'});assert.equal(r.leaveLocal,'2026-11-14 20:30')});
+test('rejects missing or invalid durations, timezone and date',()=>{assert.throws(()=>calc({...base,travelMinutes:0}));assert.throws(()=>calc({...base,bufferMinutes:NaN}));assert.throws(()=>calc({...base,flightZone:'Invalid/Zone'}));assert.throws(()=>calc({...base,flightDate:'2026-02-30'}))});
+test('rejects spring daylight saving gap and fall ambiguous time',()=>{assert.throws(()=>calc({...base,flightZone:'America/New_York',flightDate:'2026-03-08',flightTime:'02:30'}),/不存在/);assert.throws(()=>calc({...base,flightZone:'America/New_York',flightDate:'2026-11-01',flightTime:'01:30'}),/兩次/)});

@@ -34,13 +34,13 @@ export const getGeneratorRuleConfig = (rule: RuleType, customRuleById?: Map<stri
   switch (rule) {
     case LuggageRule.STRICT_CARRY_ON:
       return {
-        label: '嚴禁託運 (務必手提)',
+        label: '託運規定請確認',
         icon: 'fa-triangle-exclamation',
         style: 'bg-red-50 text-red-600 border-red-200',
       };
     case LuggageRule.STRICT_CHECKED:
       return {
-        label: '嚴禁手提 (務必託運)',
+        label: '手提規定請確認',
         icon: 'fa-ban',
         style: 'bg-orange-50 text-orange-600 border-orange-200',
       };
@@ -64,8 +64,8 @@ export const getGeneratorRuleConfig = (rule: RuleType, customRuleById?: Map<stri
 export const getResultRuleBadge = (rule: RuleType, customRuleById?: Map<string, CustomRuleDef>): RuleBadge => {
   const custom = customRuleById?.get(String(rule));
   if (custom) return { label: custom.name, style: 'bg-slate-200 text-slate-600' };
-  if (rule === LuggageRule.STRICT_CARRY_ON) return { label: '必帶', style: 'bg-red-400 text-white' };
-  if (rule === LuggageRule.STRICT_CHECKED) return { label: '禁手提', style: 'bg-red-400 text-white' };
+  if (rule === LuggageRule.STRICT_CARRY_ON) return { label: '託運待查', style: 'bg-red-400 text-white' };
+  if (rule === LuggageRule.STRICT_CHECKED) return { label: '手提待查', style: 'bg-red-400 text-white' };
   return null;
 };
 

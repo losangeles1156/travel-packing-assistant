@@ -3,6 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 const PORT = process.env.PLAYWRIGHT_PORT || '4173';
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${PORT}`;
 const SKIP_WEBSERVER = process.env.PLAYWRIGHT_SKIP_WEBSERVER === '1';
+const TEST_PWA = process.env.E2E_PWA === '1';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -22,16 +23,17 @@ export default defineConfig({
   webServer: SKIP_WEBSERVER
     ? undefined
     : {
-        command: `npm run dev -- --host 127.0.0.1 --port ${PORT}`,
+        command: `npm run ${TEST_PWA ? 'preview' : 'dev'} -- --host 127.0.0.1 --port ${PORT} --strictPort`,
         url: BASE_URL,
-        reuseExistingServer: true,
+        // A stale dev server would make the offline test appear to run without a production service worker.
+        reuseExistingServer: !TEST_PWA,
         timeout: 120_000,
       },
   projects: [
     {
       name: 'mobile-chromium',
       use: {
-        ...devices['iPhone 13'],
+        ...devices['Pixel 7'],
       },
     },
   ],

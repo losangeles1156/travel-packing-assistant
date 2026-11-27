@@ -31,6 +31,7 @@ export interface PackingItem {
   category: ItemCategory;
   rule: RuleType;
   quantity: number;
+  unit?: string;
   weight?: number; // Optional weight in kg
   isDaily?: boolean; // If true, quantity multiplies by days
   checked?: boolean; // For the checklist UI

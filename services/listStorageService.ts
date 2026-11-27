@@ -1,3 +1,9 @@
+import type { GuardianState } from '../domain/guardian';
+import type { TripDocument } from '../domain/tripDocuments';
+import type { TripDisruption } from '../domain/tripDisruptions';
+import type { TransportPlan } from '../domain/transportPlan';
+import type { Expense, ExchangeRate, CrossBorderItem } from '../domain/expenses';
+import type { TravelProtection } from '../domain/travelProtection';
 import { CustomRuleDef, ItemCategory, PackingItem, PreFlightTask } from '../types';
 
 type SortBy = 'default' | 'name' | 'category' | 'rule' | 'weight';
@@ -20,11 +26,22 @@ export type ListSnapshot = {
     duration: number;
     country: TripCountry;
     direction: TripDirection;
+    departureTimezone?: string;
+    returnTimezone?: string;
   };
   items: PackingItem[];
   tasks: PreFlightTask[];
   packedItemIds: string[];
   customRules: CustomRuleDef[];
+  guardian?: GuardianState;
+  documents?: TripDocument[];
+  disruptions?: TripDisruption[];
+  transportPlans?: TransportPlan[];
+  travelProtection?: TravelProtection;
+  expenses?: Expense[];
+  crossBorderItems?: CrossBorderItem[];
+  exchangeRates?: ExchangeRate[];
+  luggageWeights?: {carryActual?: number;carryLimit?: number;checkedActual?: number;checkedLimit?: number};
 };
 
 export type ListIndexEntry = {
@@ -39,7 +56,6 @@ export type ListIndexEntry = {
 const INDEX_KEY = 'tpa_lists_index_v1';
 const ACTIVE_KEY = 'tpa_lists_active_v1';
 const LIST_KEY_PREFIX = 'tpa_list_v1_';
-const MAX_LISTS = 5;
 
 const getNowIso = () => new Date().toISOString();
 
@@ -84,6 +100,10 @@ export const setActiveListId = (id: string) => {
   window.localStorage.setItem(ACTIVE_KEY, id);
 };
 
+export const clearActiveListId = () => {
+  if (typeof window !== 'undefined') window.localStorage.removeItem(ACTIVE_KEY);
+};
+
 export const loadListSnapshot = (id: string): ListSnapshot | null => {
   if (typeof window === 'undefined') return null;
   const parsed = safeParseJson<ListSnapshot>(window.localStorage.getItem(`${LIST_KEY_PREFIX}${id}`));
@@ -109,13 +129,7 @@ export const saveListSnapshot = (snapshot: ListSnapshot) => {
 
   const prev = loadListIndex();
   const next = [entry, ...prev.filter(e => e.id !== snapshot.id)]
-    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
-    .slice(0, MAX_LISTS);
-
-  const removed = prev.filter(e => !next.some(n => n.id === e.id));
-  removed.forEach(r => {
-    window.localStorage.removeItem(`${LIST_KEY_PREFIX}${r.id}`);
-  });
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
 
   saveListIndex(next);
   setActiveListId(snapshot.id);

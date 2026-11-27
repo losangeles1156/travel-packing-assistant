@@ -9,7 +9,8 @@ const startTrip = async (page) => {
   await page.goto('/');
   await page.waitForLoadState('networkidle');
   await page.getByPlaceholder('例如：東京, 日本').fill('東京');
-  await page.getByRole('button', { name: /建立行李清單/ }).click();
+  await page.getByRole('button', { name: /建立旅程/ }).click();
+  await page.getByRole('button', { name: /^行李清單/ }).click();
   await expect(page.getByRole('heading', { name: '客製化您的清單' })).toBeVisible();
 };
 
@@ -29,6 +30,7 @@ test.describe('mobile risk card and fixed bottom CTA', () => {
     await startTrip(page);
     await expect(page.getByText('法律風險提醒', { exact: false })).toBeVisible();
     await expect(page.getByText('違禁品可能涉及沒收、罰款甚至刑責', { exact: false })).toBeVisible();
+    await page.getByText('風險顯示與判定設定').click();
     await expect(page.getByText('目前模式：保守清零（Critical + High）', { exact: false })).toBeVisible();
     await page.getByRole('button', { name: '旅客易懂版' }).click();
     await expect(page.getByText('先把最容易出問題的物品先處理掉', { exact: false })).toBeVisible();
@@ -52,12 +54,12 @@ test.describe('mobile risk card and fixed bottom CTA', () => {
 
     const detailToggle = page.getByRole('button', { name: '詳情' }).first();
     await detailToggle.click();
-    await expect(page.getByText('依據：', { exact: false }).first()).toBeVisible();
-    await expect(page.getByText('可能後果：', { exact: false }).first()).toBeVisible();
+    await expect(page.locator('div').filter({ hasText: /^依據：/ }).last()).toBeVisible();
+    await expect(page.locator('div').filter({ hasText: /^後果等級：/ }).last()).toBeVisible();
 
     await page.getByRole('button', { name: /一鍵處理全部高風險/ }).click();
     await expect(page.getByRole('button', { name: '復原上一批處理' })).toBeVisible();
-    await expect(page.getByText('高風險已清零，可安全完成歸類。')).toBeVisible();
+    await expect(page.getByText(/需要查證；品名無法確認是否合規/)).toBeVisible();
     await expect(mobileBottomCta).toContainText('完成並歸類');
     await expect(mobileBottomCta).toBeEnabled();
 

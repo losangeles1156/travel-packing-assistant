@@ -1,0 +1,11 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';
+const compile=p=>ts.transpileModule(fs.readFileSync(new URL(p,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const domain=`data:text/javascript;base64,${Buffer.from(compile('../domain/guardian.ts')).toString('base64')}`;
+const draft=compile('../domain/extractionDraft.ts').replace('./guardian',domain);
+const draftUrl=`data:text/javascript;base64,${Buffer.from(draft).toString('base64')}`;
+const js=compile('../domain/mockAssistant.ts').replace('./extractionDraft',draftUrl);
+const {runMockAssistant}=await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+const text='目的地：東京';const good={fields:[{field:'destination',value:'東京',start:4,end:6}]};
+test('fixture transport returns source-anchored draft without modifying a trip',async()=>{assert.deepEqual(await runMockAssistant(text,async()=>good),{ok:true,draft:good})});
+test('simulated authorization, limit, invalid output and failure return safe reasons',async()=>{for(const [status,reason] of [[401,'unauthorized'],[429,'rate_limited'],[503,'unavailable']])assert.deepEqual(await runMockAssistant(text,async()=>{throw {status,message:'secret'}}),{ok:false,reason});assert.equal((await runMockAssistant(text,async()=>({fields:[{...good.fields[0],value:'大阪'}]}))).reason,'invalid_output')});
+test('timeout and cancellation stop the fixture without infinite retries',async()=>{let called=0;const transport=({signal})=>new Promise((_resolve,reject)=>{called++;signal.addEventListener('abort',()=>reject(new Error('aborted')))});assert.equal((await runMockAssistant(text,transport,{timeoutMs:5})).reason,'timeout');const c=new AbortController();const pending=runMockAssistant(text,transport,{signal:c.signal,timeoutMs:1000});c.abort();assert.equal((await pending).reason,'cancelled');assert.equal(called,2)});

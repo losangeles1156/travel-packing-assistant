@@ -1,0 +1,32 @@
+import { test, expect } from '@playwright/test';
+
+test('packing selection and quantity can be changed and retained with keyboard access', async ({ page }) => {
+  await page.goto('/');
+  await page.getByPlaceholder('例如：東京, 日本').fill('行李回歸測試');
+  await page.getByRole('button', { name: /建立旅程/ }).click();
+  await page.getByRole('button', { name: /^行李清單/ }).click();
+  await page.getByPlaceholder('新增物品 (歸類為雜項)...').fill('測試收納袋');
+  await page.getByRole('button', { name: '新增', exact: true }).click();
+  const item = page.getByRole('checkbox', { name: '選擇 測試收納袋' });
+  await page.getByRole('button', { name: '增加 測試收納袋 數量' }).click();
+  await item.focus();
+  await page.keyboard.press('Space');
+  await expect(item).toHaveAttribute('aria-checked', 'false');
+  await page.keyboard.press('Space');
+  await expect(item).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByText('已儲存至本機', { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: /^行李清單/ }).click();
+  await expect(item).toHaveAttribute('aria-checked', 'true');
+  await expect(item.locator('..')).toContainText('2');
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.getByRole('button', { name: '刪除 測試收納袋' }).click();
+  await expect(item).toBeVisible();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: '刪除 測試收納袋' }).click();
+  await expect(item).toHaveCount(0);
+  await expect(page.getByText('已儲存至本機', { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: /^行李清單/ }).click();
+  await expect(item).toHaveCount(0);
+});

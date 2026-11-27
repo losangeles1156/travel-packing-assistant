@@ -28,13 +28,15 @@ Copy `.env.example` and fill values per platform.
 
 - `ALLOWED_ORIGIN`: comma-separated frontend origins allowed by CORS  
   Example: `https://your-app.vercel.app,https://your-app-git-main-yourteam.vercel.app`
-- `ADMIN_TOKEN`: required in production for `/api/admin/*`
+- `ADMIN_TOKEN`: required in every environment for `/api/admin/*`; configure a strong token locally too
 - `TRUST_PROXY`: proxy trust setting (default `1` for Zeabur)
 - `SHARE_TTL_DAYS`: share link validity window (default `30`)
 - `EVENT_RETENTION_DAYS`: events/sessions/users retention days for auto-cleanup (default `180`)
 - `AUTO_CLEANUP_INTERVAL_HOURS`: cleanup interval in hours (default `24`)
 - `ENABLE_ADMIN_BACKUP`: set `1` only when you intentionally need `/api/admin/backup` in production
 - `PORT`: optional on local; Zeabur provides it automatically
+
+The legacy serverless API uses the direct connection peer for IP rate limits and does not trust client-supplied forwarding headers. Behind a proxy, many clients may share a limit; verify the actual proxy and rate limiting architecture before deploying this change.
 
 ## Build & Checks
 
