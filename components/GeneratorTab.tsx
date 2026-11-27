@@ -44,11 +44,12 @@ import type { TravelProtection } from '../domain/travelProtection';
 import { emptyGuardian, initialRules, markChangedRules, markDocumentChanges, markScheduleChanges, type GuardianState } from '../domain/guardian';
 import { isValidTimeZone } from '../domain/timezone';
 
-type Props = { registerFlush: (flush: (() => Promise<void>) | null) => void; onStorageError: (message: string) => void; expenses: Expense[]; crossBorderItems: CrossBorderItem[]; exchangeRates: ExchangeRate[]; onShoppingChange: (expenses: Expense[], items: CrossBorderItem[]) => void; onRatesChange: (rates: ExchangeRate[]) => void; onCountryChange: (country: string) => void; onNavigateToShopping?: () => void; receiptRequest?: ReceiptRequest | null; onReceiptRequestHandled?: () => void };
-const GeneratorTab: React.FC<Props> = ({ registerFlush, onStorageError, expenses, crossBorderItems, exchangeRates, onShoppingChange, onRatesChange, onCountryChange, onNavigateToShopping, receiptRequest, onReceiptRequestHandled }) => {
+type Props = { registerFlush: (flush: (() => Promise<void>) | null) => void; onStorageError: (message: string) => void; expenses: Expense[]; crossBorderItems: CrossBorderItem[]; exchangeRates: ExchangeRate[]; onShoppingChange: (expenses: Expense[], items: CrossBorderItem[]) => void; onRatesChange: (rates: ExchangeRate[]) => void; onCountryChange: (country: string) => void; onNavigateToShopping?: () => void; receiptRequest?: ReceiptRequest | null; onReceiptRequestHandled?: () => void; bookingRequest?: ReceiptRequest | null; onBookingRequestHandled?: () => void };
+const GeneratorTab: React.FC<Props> = ({ registerFlush, onStorageError, expenses, crossBorderItems, exchangeRates, onShoppingChange, onRatesChange, onCountryChange, onNavigateToShopping, receiptRequest, onReceiptRequestHandled, bookingRequest, onBookingRequestHandled }) => {
   const [step, setStep] = useState<number>(0); // 0: Input, 1: Customize, 2: Result
   const [journeySection, setJourneySection] = useState<'overview' | 'packing'>('overview');
   const [expenseReceipt, setExpenseReceipt] = useState<ReceiptRequest | null>(null);
+  const [documentImport, setDocumentImport] = useState<ReceiptRequest | null>(null);
   const [disruptionOpenRequest, setDisruptionOpenRequest] = useState(0);
   const [startError, setStartError] = useState<{field:'destination'|'start'|'end'; message:string} | null>(null);
   const [creating, setCreating] = useState(false);
@@ -452,6 +453,14 @@ const GeneratorTab: React.FC<Props> = ({ registerFlush, onStorageError, expenses
     setExpenseReceipt(receiptRequest);
     onReceiptRequestHandled?.();
   }, [receiptRequest, activeListId, step]);
+
+  useEffect(() => {
+    if (!bookingRequest || !activeListId || step === 0) return;
+    setStep(1);
+    setJourneySection('overview');
+    setDocumentImport(bookingRequest);
+    onBookingRequestHandled?.();
+  }, [bookingRequest, activeListId, step]);
 
   const handleOpenRecentList = async (id: string) => {
     try {
@@ -991,6 +1000,7 @@ const GeneratorTab: React.FC<Props> = ({ registerFlush, onStorageError, expenses
     return (
       <div className="new-trip max-w-lg mx-auto">
         {receiptRequest && <div role="status" className="receipt-pending">{receiptRequest.text ? '已收到分享的收據文字。' : ''}請先選擇或建立旅程，接著會自動打開記帳。</div>}
+        {bookingRequest && <div role="status" className="receipt-pending">已收到分享的訂位確認信。請先選擇或建立旅程，接著會列出辨識到的航班與住宿讓你確認。</div>}
         {listIndex.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 mb-6 overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
@@ -1277,7 +1287,7 @@ const GeneratorTab: React.FC<Props> = ({ registerFlush, onStorageError, expenses
         }}>更新日期與時區</button>{dateNotice && <p role="status" className="text-sm mt-2">{dateNotice}</p>}
       </details>
       <div id="journey-emergency" tabIndex={-1}><EmergencyCard country={tripCountry} destination={destination} documents={documents} protection={travelProtection} onEdit={area => { const target = document.getElementById(`journey-${area}`); target?.scrollIntoView({behavior:'smooth',block:'start'}); target?.focus({preventScroll:true}); }} /></div>
-      <div id="journey-documents" tabIndex={-1}><TripDocuments key={`documents-${activeListId ?? 'new'}`} documents={documents} onChange={(next,kind)=>{setDocuments(next);setGuardian(prev=>markDocumentChanges(prev,kind));}} /></div>
+      <div id="journey-documents" tabIndex={-1}><TripDocuments key={`documents-${activeListId ?? 'new'}`} importRequest={documentImport} documents={documents} onChange={(next,kind)=>{setDocuments(next);setGuardian(prev=>markDocumentChanges(prev,kind));}} /></div>
       <div id="journey-disruptions" tabIndex={-1}><TripDisruptions key={`disruptions-${activeListId ?? 'new'}`} documents={documents} disruptions={disruptions} transportPlans={transportPlans} protection={travelProtection} expenses={expenses} onNavigate={area => { const target = document.getElementById(`journey-${area}`); target?.scrollIntoView({behavior:'smooth',block:'start'}); target?.focus({preventScroll:true}); }} openRequest={disruptionOpenRequest} onChange={next=>{setDisruptions(next);setGuardian(prev=>markDocumentChanges(prev,'flight'));}} /></div>
       <div id="journey-transport" tabIndex={-1}><TransportPlans key={`transport-${activeListId ?? 'new'}`} documents={documents} plans={transportPlans} onChange={next=>{setTransportPlans(next);setGuardian(prev=>markDocumentChanges(prev,'flight'));}} /></div>
       <div id="journey-protection" tabIndex={-1}><TravelProtectionPanel key={`protection-${activeListId ?? 'new'}`} value={travelProtection} disruptions={disruptions} onChange={next=>{setTravelProtection(next);setGuardian(prev=>prev.tasks.G2 ? {...prev,tasks:{...prev.tasks,G2:{...prev.tasks.G2,needsReview:true}}} : prev);}} /></div>

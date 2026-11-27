@@ -1,6 +1,6 @@
 const MAX_SOURCE_LENGTH = 10000;
 export type ReceiptRequest = { id: number; text: string };
-// Must match share_target.params in vite.config.ts.
+// Must match share_target.params in vite.config.ts; installed apps keep these names, so renaming needs a reinstall.
 export const SHARE_PARAMS = ['receipt_title', 'receipt_text', 'receipt_url'] as const;
 
 /** Splits text shared from the Android share sheet out of a query string; null when nothing was shared. */
@@ -14,8 +14,8 @@ export function readSharedReceipt(search: string): { text: string; rest: string 
   return { text: text.slice(0, MAX_SOURCE_LENGTH), rest: params.toString() };
 }
 
-/** Takes shared receipt text and removes it from the address bar so it does not linger in history. */
-export function takeSharedReceiptText(): string {
+/** Takes text shared into the app and removes it from the address bar so it does not linger in history. */
+export function takeSharedText(): string {
   const shared = readSharedReceipt(window.location.search);
   if (!shared) return '';
   window.history.replaceState(window.history.state, '', `${window.location.pathname}${shared.rest ? `?${shared.rest}` : ''}${window.location.hash}`);

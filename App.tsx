@@ -9,7 +9,8 @@ import AdminDashboardTab from './components/AdminDashboardTab';
 import { trackEvent } from './services/analyticsService';
 import { CLOUD_FEATURES_ENABLED } from './services/featureFlags';
 import type { Expense, CrossBorderItem, ExchangeRate } from './domain/expenses';
-import { takeSharedReceiptText, type ReceiptRequest } from './domain/receiptText';
+import { takeSharedText, type ReceiptRequest } from './domain/receiptText';
+import { parseBookingText } from './domain/bookingText';
 
 enum Tab {
   GENERATOR = 'generator',
@@ -30,6 +31,7 @@ function App() {
   const [storageRevision, setStorageRevision] = useState(0);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [receiptRequest, setReceiptRequest] = useState<ReceiptRequest | null>(null);
+  const [bookingRequest, setBookingRequest] = useState<ReceiptRequest | null>(null);
   const flushRef = useRef<(() => Promise<void>) | null>(null);
   const registerFlush = useCallback((flush: (() => Promise<void>) | null) => { flushRef.current = flush; }, []);
   const flush = async () => { if (flushRef.current) await flushRef.current(); };
@@ -47,8 +49,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const shared = takeSharedReceiptText();
-    if (shared) setReceiptRequest({ id: Date.now(), text: shared });
+    const shared = takeSharedText();
+    if (!shared) return;
+    const request = { id: Date.now(), text: shared };
+    let isBooking = false;
+    try { isBooking = parseBookingText(shared).length > 0; } catch { /* oversized text falls through to the receipt form, which reports it */ }
+    if (isBooking) setBookingRequest(request); else setReceiptRequest(request);
   }, []);
 
   useEffect(() => {
@@ -117,7 +123,7 @@ function App() {
       {/* Main Content */}
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6">
         <div className="animate-fade-in-up">
-            <div hidden={activeTab !== Tab.GENERATOR}><GeneratorTab key={storageRevision} registerFlush={registerFlush} onStorageError={setStorageError} expenses={expenses} crossBorderItems={crossBorderItems} exchangeRates={exchangeRates} onShoppingChange={handleShoppingChange} onRatesChange={setExchangeRates} onCountryChange={setTripCountry} onNavigateToShopping={() => handleTabChange(Tab.SHOPPING)} receiptRequest={receiptRequest} onReceiptRequestHandled={() => setReceiptRequest(null)} /></div>
+            <div hidden={activeTab !== Tab.GENERATOR}><GeneratorTab key={storageRevision} registerFlush={registerFlush} onStorageError={setStorageError} expenses={expenses} crossBorderItems={crossBorderItems} exchangeRates={exchangeRates} onShoppingChange={handleShoppingChange} onRatesChange={setExchangeRates} onCountryChange={setTripCountry} onNavigateToShopping={() => handleTabChange(Tab.SHOPPING)} receiptRequest={receiptRequest} onReceiptRequestHandled={() => setReceiptRequest(null)} bookingRequest={bookingRequest} onBookingRequestHandled={() => setBookingRequest(null)} /></div>
             {activeTab === Tab.SHOPPING && <CrossBorderTab expenses={expenses} items={crossBorderItems} rates={exchangeRates} defaultDestination={tripCountry === 'JP' ? 'TW' : 'unknown'} onChange={setCrossBorderItems} onReceiptCapture={async () => { await handleTabChange(Tab.GENERATOR); setReceiptRequest({ id: Date.now(), text: '' }); }} />}
             {activeTab === Tab.REGULATIONS && <div className="secondary-screen"><RegulationsTab /></div>}
             {activeTab === Tab.ADMIN && adminEnabled && <AdminDashboardTab />}

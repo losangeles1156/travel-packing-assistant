@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { documentError, emptyDocumentFields, parseDocumentText, type DocumentFields, type DocumentKind, type TripDocument } from '../domain/tripDocuments';
 import { disruptionGuidance, type DisruptionKind } from '../domain/disruptionGuidance';
+import type { ReceiptRequest } from '../domain/receiptText';
+import BookingImport, { type ReviewDraft } from './BookingImport';
 
-export default function TripDocuments({ documents, onChange }: { key?: string; documents: TripDocument[]; onChange: (next: TripDocument[], kind: DocumentKind) => void }) {
+export default function TripDocuments({ documents, onChange, importRequest }: { key?: string; documents: TripDocument[]; onChange: (next: TripDocument[], kind: DocumentKind) => void; importRequest?: ReceiptRequest | null }) {
   const [kind, setKind] = useState<DocumentKind | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [fields, setFields] = useState<DocumentFields>(emptyDocumentFields);
@@ -10,9 +12,11 @@ export default function TripDocuments({ documents, onChange }: { key?: string; d
   const [text, setText] = useState('');
   const [notice, setNotice] = useState('');
   const [scenario, setScenario] = useState<{id: string; kind: DisruptionKind} | null>(null);
-  const start = (next: DocumentKind, doc?: TripDocument) => {
-    setKind(next); setEditing(doc?.id ?? null); setFields(doc ? { title:doc.title,flightNumber:doc.flightNumber,from:doc.from,to:doc.to,startDate:doc.startDate,startTime:doc.startTime,startZone:doc.startZone,endDate:doc.endDate,endTime:doc.endTime,endZone:doc.endZone,address:doc.address,contact:doc.contact,reference:doc.reference ?? '' } : emptyDocumentFields());
-    setSource(doc?.source ?? 'manual'); setText(''); setNotice('');
+  const [reviewingDraft, setReviewingDraft] = useState<string | null>(null);
+  const [addedDraftId, setAddedDraftId] = useState<string | null>(null);
+  const start = (next: DocumentKind, doc?: TripDocument, prefill?: DocumentFields) => {
+    setReviewingDraft(null); setKind(next); setEditing(doc?.id ?? null); setFields(doc ? { title:doc.title,flightNumber:doc.flightNumber,from:doc.from,to:doc.to,startDate:doc.startDate,startTime:doc.startTime,startZone:doc.startZone,endDate:doc.endDate,endTime:doc.endTime,endZone:doc.endZone,address:doc.address,contact:doc.contact,reference:doc.reference ?? '' } : prefill ?? emptyDocumentFields());
+    setSource(doc?.source ?? (prefill ? 'pasted' : 'manual')); setText(''); setNotice('');
   };
   const save = () => {
     if (!kind) return;
@@ -25,6 +29,7 @@ export default function TripDocuments({ documents, onChange }: { key?: string; d
     const id = existing?.id ?? (globalThis.crypto?.randomUUID?.() ?? `doc-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     const doc: TripDocument = { ...cleaned, id, kind, source, createdAt: existing?.createdAt ?? now, updatedAt: now };
     onChange(existing ? documents.map(d => d.id === existing.id ? doc : d) : [...documents, doc], kind);
+    if (reviewingDraft) { setAddedDraftId(reviewingDraft); setReviewingDraft(null); }
     setKind(null); setText(''); setNotice('已確認記錄，請等待旅程資料保存完成。');
   };
   const remove = (doc: TripDocument) => { if (window.confirm(`確定刪除「${doc.title}」？`)) { onChange(documents.filter(d => d.id !== doc.id),doc.kind); setNotice('已刪除該筆資料，請等待保存完成。'); } };
@@ -43,6 +48,7 @@ export default function TripDocuments({ documents, onChange }: { key?: string; d
       <div className="trip-document-actions"><button type="button" aria-label={`編輯 ${doc.title}`} onClick={()=>start(doc.kind,doc)}>編輯</button><button type="button" aria-label={`刪除 ${doc.title}`} onClick={()=>remove(doc)}>刪除</button></div>
       {doc.kind === 'flight' && <details><summary>航班有變動時怎麼辦？</summary><p>選擇情境查看準備方向；這不是航班即時狀態，也不會替你記錄變動。</p><div className="trip-document-add"><button type="button" aria-pressed={scenario?.id === doc.id && scenario.kind === 'delay'} onClick={()=>setScenario({id:doc.id,kind:'delay'})}>航班延誤</button><button type="button" aria-pressed={scenario?.id === doc.id && scenario.kind === 'cancellation'} onClick={()=>setScenario({id:doc.id,kind:'cancellation'})}>航班取消</button></div>{scenario?.id === doc.id && <div aria-live="polite">{disruptionGuidance(scenario.kind,documents).map(item=><p key={item.title}><strong>{item.title}：</strong>{item.action}</p>)}</div>}</details>}
     </article>)}</div>}
+    <BookingImport seed={importRequest} addedDraftId={addedDraftId} onReview={(draft: ReviewDraft) => { start(draft.kind, undefined, draft.fields); setReviewingDraft(draft.id); requestAnimationFrame(() => document.querySelector('.trip-documents .trip-document-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }} />
     <div className="trip-document-add"><button type="button" onClick={()=>start('flight')}>＋ 新增航班</button><button type="button" onClick={()=>start('lodging')}>＋ 新增住宿</button></div>
     {kind && <div className="trip-document-editor"><h3>{editing ? '修改' : '新增'}{kind === 'flight' ? '航班' : '住宿'}</h3><p>請自行核對資訊；系統不會連線查詢航班或訂房狀態。時區不明可留空。</p>
       {!editing && <details><summary>貼上訂單文字擷取草稿</summary><p>只辨識「欄位：內容」的明確資料，例如「{kind === 'flight' ? '出發日期' : '入住日期'}：2026-12-01」。請勿貼入護照、付款資料或密碼；原文不會保存。</p><label>訂單文字<textarea value={text} maxLength={10000} onChange={e=>setText(e.target.value)} /></label><button type="button" onClick={()=>{ try { const parsed = parseDocumentText(kind,text); setFields(parsed); setSource('pasted'); setNotice('已產生草稿，請逐欄核對後確認加入。'); } catch (e) { setNotice(e instanceof Error ? e.message : '無法讀取文字。'); } }}>擷取草稿</button></details>}
